@@ -25,6 +25,7 @@ export class GrapeRank {
     return record
   }
 
+  
 
   /**
    * cycle through a list of pubkeys that have been 'rated' by a user
@@ -35,22 +36,23 @@ export class GrapeRank {
    * @returns 
    */
   private calculateRatingSums(
-      rater : GrapevineScore,  pubkeys : pubkey[], 
-      interpretation : GrapevineRating<"PubkeyList"|"Event">,  exclude : pubkey[] = []
+      raters : pubkey[], 
+      interpretation : GrapevineRating<"PubkeyList"|"Event">,  
+      exclude : pubkey[] = []
     ) : GrapevineSums {
     let sumofProducts : number = 0;
     let sumofWeights : number = 0;
-    // cycle through each pubkey that follows the reter
-    pubkeys.forEach((pubkey, item) => {
-      // if pubkey is in the observer network and NOT the pubkey being rated
-      if (!!this.scores[pubkey]?.influence && !exclude[pubkey]) {
-          let weight = this.scores[pubkey].influence * interpretation[1];
+    // cycle through each pubkey that follows the ratee
+    raters.forEach((rater_pk, item) => {
+      // if rater pubkey is in the observer network and NOT the pubkey being rated
+      if (!!this.scores[rater_pk]?.influence && !exclude[rater_pk]) {
+          let weight = this.scores[rater_pk].influence * interpretation.confidence;
           // no attenuationFactor for observer
-          if (pubkey != this.observer) 
+          if (rater_pk != this.observer) 
             weight = weight * this.settings.attenuationFactor;
           // add to sum
           sumofWeights += weight
-          sumofProducts += weight * interpretation[0]
+          sumofProducts += weight * interpretation.score
       }
     })
     return [sumofProducts,sumofWeights]

@@ -39,37 +39,81 @@ export type GrapevineUserScores = Record<pubkey,GrapevineScore | undefined>
 
 
 /**
- * 
+ * A customizable worldview
  */
-export class GrapevineRating<Type> {
+export class GrapevineWorldview<Types = (string | kindnumber)[]> {
+  name : string
+  ratables : Ratables<RatableClasses<Types>>[]
+  ratings : GrapevineRatingsTable<Types>
+}
+
+/**
+ * A table of Ratings, indexed by rater's pubkey and a UID for the ratable event 
+ */
+export type GrapevineRatingsTable<Types = (string | number)[]> = 
+  Record<pubkey,Record<RatableUids<Types>,GrapevineRatings<Types>>>
+
+/**
+ * an Instamnce of R, where Type can be one of:
+ * string : a search parameter to filter content field of known event kinds
+ * kindnumber : a number representing a specific event kind 
+ */
+export class GrapevineRating<Type = string | kindnumber> {
   constructor(
-    public score : RatableScore<Type>,
-    public confidence : percent = 100,
+    public score : RatableScore<RatableClass<Type>>,
+    // public confidence : percent = 100,
     readonly rater? : pubkey,
-    readonly ratee? : RatableUid<Type>,
-    public context? : RatableContext<Type>,
+    readonly ratee? : RatableUid<RatableClass<Type>>,
+    public context? : RatableContext<RatableClass<Type>>,
     // readonly type : Ratable<Type>,
   ){}
 }
+type GrapevineRatings<Types = (string | kindnumber)[]> = 
+  GrapevineRating<keyof Types> | never
 
-type Ratable<Type> = 
-Type extends "Event" ? "Event" : 
-Type extends "Pubkey" ? "Pubkey" : 
-Type extends "PubkeyList" ? "PubkeyList" : 
+
+
+export class Ratable<Type> {
+  constructor(
+    readonly  confidence : RatableConfidence<Type>
+  ){}
+}
+type Ratables<Types = (string | kindnumber)[]> = 
+  Ratable<keyof Types> | never
+
+
+type RatableClass<Type = string | kindnumber> = 
+  // FIXME number strings don't work here
+  Type extends '3' | '10000' ? "PubkeyList" : 
+  Type extends '0' ? "Pubkey" : 
+  Type extends kindnumber ? "Event" : 
+  Type extends string ? "Content" : 
   never
+type RatableClasses<Types = (string | kindnumber)[]> = 
+RatableClass<keyof Types> | never
+
 
 type RatableUid<Type> = 
-Type extends "Pubkey" ? pubkey : 
-Type extends "PubkeyList" ?  3 | 3000 :
-Type extends Ratable<Type> ? string : 
+  RatableClass<Type> extends "Pubkey" ? pubkey : 
+  RatableClass<Type> extends "PubkeyList" ?  3 | 10000 :
+  RatableClass<Type> extends string ? string : 
   never
+type RatableUids<Types = (string | kindnumber)[]> = 
+  RatableUid<keyof Types> | never
 
 type RatableScore<Type> = 
-  Type extends "PubkeyList" ? 0 | 1 : 
-  Type extends Ratable<Type> ? percent :
+  RatableClass<Type> extends "PubkeyList" ? 0 | 1 : 
+  RatableClass<Type> extends string ? percent :
+  never
+
+type RatableConfidence<Type> = 
+  RatableClass<Type> extends "PubkeyList" ? 0 | 1 :   
+  RatableClass<Type> extends string ? percent :
   never
 
 type RatableContext<Type> = string;
+
+// let myfollow : GrapevineRating<"Mute"> = new GrapevineRating<"Mute">(1)
 
 /**
  * @index 0 = sum of weights of pubkeys doing the rating
@@ -85,10 +129,10 @@ export class GrapeRankSettings {
   constructor(
     readonly attenuationFactor : percent = 0,
     readonly rigor : percent = 0,
-    readonly defaultPubkeyRating  = new GrapevineRating<"Pubkey">(100),
-    readonly followsInterperetation  = new GrapevineRating<"PubkeyList">(1),
-    readonly mutesInterperetation  = new GrapevineRating<"PubkeyList">(1),
-    readonly reportsInterperetation  = new GrapevineRating<"Event">(100),
+    readonly defaultPubkeyRating  = new GrapevineRating<'0'>(100),
+    readonly followsInterperetation  = new GrapevineRating<'3'>(1),
+    readonly mutesInterperetation  = new GrapevineRating<'10000'>(0),
+    readonly reportsInterperetation  = new GrapevineRating<'1984'>(100),
     readonly apiEndpoint : string = 'https://api.grapevine.my',
   ){}
 }
@@ -109,3 +153,6 @@ type Enumerate<N extends number, Acc extends number[] = []> = Acc['length'] exte
 type IntRange<F extends number, T extends number> = Exclude<Enumerate<T>, Enumerate<F>>
 
 export type percent = IntRange<0,101>
+export type onetofive = IntRange<1,5>
+export type kindnumber = number
+// export type kindnumber_replaceable = IntRange<10000,20000>
