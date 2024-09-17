@@ -1,4 +1,4 @@
-import * as types from "../types"
+import * as types from "../types.ts"
 
 // Export ALL modules implementing InterpretorClass from here
 export * from "./Nostr/Interpretor.ts"

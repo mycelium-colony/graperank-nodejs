@@ -1,15 +1,15 @@
-import * as types from "./types"
+import * as types from "../types"
 
 
-export class GrapeRank {
-  
+export class CalculatorAPI {
+
   /**
    * get scorecard tables from cache (or call calculate) 
    */
   get() : types.G {
     throw('not implemented')
   }
-  
+
   /**
    * Calculate new scorecard tables (and store in cache)
    */
