@@ -4,36 +4,17 @@ import * as types from "../types"
 export class CalculatorAPI {
 
   /**
-   * get scorecard tables from cache (or call calculate) 
+   * TODO get scorecard tables from cache (or call calculate) 
    */
   get() : types.G {
     throw('not implemented')
   }
 
   /**
-   * Calculate new scorecard tables (and store in cache)
+   * Calculate new scorecard tables 
+   * TODO (and store in cache)
    */
-  calculate() : types.G {
-    throw('not implemented')
-  }
-  
-}
-
-class Scorecard implements types.Scorecard {
-  readonly GID : types.GID
-  readonly UID : types.elemId
-  // public sig : signature
-  constructor(
-   public influence : number = 0, // non negative number 
-   public average : number = 0, // number
-   public weights : number = 0, // non negative number 
-   public confidence : number = 0, // 0 - 1
-   public totals : number = 0, // mutable
-   public context? : types.context // TODO  // must be unique for each observer
-  ){}
-}
-
-function calculateScorecards( G : types.G, R : types.R, P : types.P) : types.G {
+  calculate ( G : types.G, R : types.R, P : types.P) : types.G {
     // const g_out = new G()
     let rated : {[x:types.elemId] : Scorecard} = {}
     let raters = {}
@@ -64,6 +45,22 @@ function calculateScorecards( G : types.G, R : types.R, P : types.P) : types.G {
     }
     return {observer:rated}
   }
+  
+}
+
+class Scorecard implements types.Scorecard {
+  readonly GID : types.GID
+  readonly UID : types.elemId
+  // public sig : signature
+  constructor(
+   public influence : number = 0, // non negative number 
+   public average : number = 0, // number
+   public weights : number = 0, // non negative number 
+   public confidence : number = 0, // 0 - 1
+   public totals : number = 0, // mutable
+   public context? : types.context // TODO  // must be unique for each observer
+  ){}
+}
 
 function convertWeightsToCertainty(weights : number, rigor : number){
     const rigority = -Math.log(rigor)
