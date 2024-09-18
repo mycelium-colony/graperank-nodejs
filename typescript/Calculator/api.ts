@@ -3,12 +3,19 @@ import * as types from "../types"
 
 export class CalculatorAPI {
 
-  /**
-   * TODO get scorecard tables from cache (or call calculate) 
-   */
-  get() : types.G {
-    throw('not implemented')
-  }
+  // static methods(){
+  //   return {
+  //     calculate : {
+  //       params : {
+  //         G : "Grapevine table",
+  //         R : "Ratings table",
+  //         P : "User Parameters"
+  //       },
+  //       returns : "Grapevoine Table",
+  //       description : 'This API retrieves or calculates new grapevine tables based on input grapevines and ratings tables.'
+  //     }
+  //   }
+  // }
 
   /**
    * Calculate new scorecard tables 
@@ -20,7 +27,7 @@ export class CalculatorAPI {
     let raters = {}
     // Step 1 : for each pubkey in R
     for(let pubkey in R){
-      raters[pubkey] = G[P.observer][pubkey]?.influence || P.default.influence
+      raters[pubkey] = G[P.observer][pubkey]?.influence || P.calculator.influence
       for(let elemId in R[pubkey]){
         // step 2 : for each UID in R[pubkey]
         if(!rated[elemId]){

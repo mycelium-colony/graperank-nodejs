@@ -14,6 +14,7 @@ export type ParamsObject = {
   [k:string] : ParamValue
 }
 
+export type className = string
 
 /**
  * A Ratings Table per Event Kind for ALL of Nostr
@@ -29,6 +30,13 @@ export type Rating = {
   confidence : number // 0 - 1
   score : number // 0 or 1 / percent
   context? : string[] // [ [domain], [interpretor], [kind] ]
+}
+export type RatingCacheParams = {
+  source : string,
+  kind : kindId,
+  rater? : userId,
+  ratee? : elemId,
+  context? : string,
 }
 
 
@@ -53,6 +61,12 @@ export type Scorecard = {
    totals : number, // mutable
    context? : context // TODO  // must be unique for each observer
 }
+export type ScorecardCacheParams = {
+  engine : string,
+  observer? : userId,
+  observee? : elemId,
+  context? : string,
+}
 
 
 /**
@@ -62,10 +76,16 @@ export type P = {
   observer: userId
   attenuation : number // 0 -1 
   rigor : number // 0 -1
-  default : {
+  calculator : {
     confidence : number // 0 - 1
     score : number // number
     influence : number // number
+  }
+  interpretators : {
+    [i:className] : InterpretationParams[]
+  }
+  presets : {
+
   }
 }
 
@@ -75,11 +95,11 @@ export type P = {
  */
 export type InterpretorParams = {
   raters : userId[] // an array of user identifiers (nostr pubkeys) for which to fetch and interpret data.
-  interpretor : string // class name of InterpretorClass implementor
+  interpretor : className // class name of InterpretorSource implementor
   interpretations : InterpretationParams[] // any number of interpretations for fetched data may be processed in a given request.
 }
 export type InterpretationParams = {
-  kind : kindId // any identifyer of a datatype (nostr event kind number) for which to fetch data and interpret results
+  kind : kindId // any identifier of a datatype (nostr event kind number) for which to fetch data and interpret results
   filter? : ParamsObject | ParamsArray // a filter object or array used for fetching data for this kind
   prefs? : ParamsObject // an array of args passed (after first arg) into the Interpretation callback for this kind
 }

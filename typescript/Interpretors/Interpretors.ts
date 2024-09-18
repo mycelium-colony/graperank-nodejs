@@ -1,13 +1,14 @@
 import * as types from "../types.ts"
 
-// Export ALL modules implementing InterpretorClass from here
+// Export ALL modules implementing InterpretorSource from here
 export * from "./Nostr/Interpretor.ts"
 
-export interface InterpretorClass {
+export interface InterpretorSource {
+  readonly source : string;
   // 
   readonly params:types.InterpretorParams
   // default preferences fort each kind to be interpreted
-  readonly prefs : { [n:types.kindId] : types.ParamsObject }
+  readonly defaults : { [n:types.kindId] : types.ParamsObject }
   // a callback to fetch data. called by InterpretationAPI
   fetchData() : Promise<types.InterpretableData>
   // different callbacks for each kind to be interpreted. called by InterpretationAPI
@@ -18,9 +19,11 @@ export interface InterpretorClass {
 
 
 // DEMO implementaiton
-class DemoInterpretor implements InterpretorClass {
+class DemoInterpretor implements InterpretorSource {
 
-  readonly prefs = {
+  readonly source : 'demo'
+
+  readonly defaults = {
     demokind : { 
       foo : true 
     }
@@ -39,7 +42,7 @@ class DemoInterpretor implements InterpretorClass {
   readonly interpretRatings = {
     demokind : (data: object[], author? : types.userId, prefs?: types.ParamsObject) : types.R => {
       // merge passed in prefs with default prefs
-      prefs = {...this.prefs.demokind, ...prefs}
+      prefs = {...this.defaults.demokind, ...prefs}
       let R : types.R = {}
       // interpret ratings from data, using prefs to assign Ratings
       return R

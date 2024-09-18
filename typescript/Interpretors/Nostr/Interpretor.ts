@@ -1,22 +1,25 @@
-import {InterpretorClass} from "../Interpretors.ts"
+import {InterpretorSource} from "../Interpretors.ts"
 import * as types from "../../types.ts"
 import NDK, { NDKEvent } from "@nostr-dev-kit/ndk";
+import { RatingsCache } from "../../Storage/api.ts";
 
 
 // Each RatableClass modules file MUST be exported 
 // with a new `export` directive in Ratables.ts
 
-export class NostrInterpretor implements InterpretorClass {
+export class NostrInterpretor implements InterpretorSource {
+
+  readonly source : 'nostr'
 
   readonly ndk : NDK
 
-  readonly prefs = {
+  readonly defaults = {
     3 : {
       score : 1,
       confidence : .5
     },
     10000 : {
-      score : 1,
+      score : 0,
       confidence : .5
     },
     1984 : {
@@ -63,64 +66,45 @@ export class NostrInterpretor implements InterpretorClass {
      * Interpret kind 3 follows lists
      */
     3 : (events : NDKEvent[], author? : types.userId, prefs? : types.ParamsObject) : types.R => {
-      // merge passed in prefs with default prefs
-      prefs = {...this.prefs[3], ...prefs}
-      let rating = {
-        score : prefs.score  as number,
-        confidence : prefs.confidence  as number,
-        context : ['grapevine.my', 'nostr', '3']
-      }
-      return applyRatingByTag(rating,events)
+      let kind = 3
+      let R = applyRatingByTag(kind, events, prefs)
+      return R
     },
 
     /**
      * Interpret kind 10000 mute lists
      */
     10000 : (events : NDKEvent[], author? : types.userId, prefs? : types.ParamsObject) : types.R => {
-      // merge passed in prefs with default prefs
-      prefs = {...this.prefs[10000], ...prefs}
-      let rating = {
-        score : prefs?.score  as number,
-        confidence : prefs?.confidence  as number,
-        context : ['grapevine.my', 'nostr', '10000']
-      }
-      return applyRatingByTag(rating,events)
+      let R =  applyRatingByTag(10000, events, prefs)
+      return R
     },
     
     /**
      * Interpret kind 1984 reports
      */
     1984 : (events : NDKEvent[], author? : types.userId, prefs? : types.ParamsObject) : types.R => {
-      let R : types.R = {}
-      // merge passed in prefs with default prefs
-      prefs = {...this.prefs[10000], ...prefs}
-      let rating = {
-        score : 0,
-        confidence : prefs.confidence as number,
-        context : ['grapevine.my', 'nostr', '1984']
-      }
-      // apply a single rating for all reported pubkeys, if indicated in prefs.score
-      // otherwise apply rating for reported pubkeys according to report type
-      for(let e in events){
-        for(let tag in events[e].tags){
-          if(tag[0] == "P"){
-            rating.score = ( prefs.score || prefs[tag[2]] || 0 ) as number
-            R[events[e].pubkey][tag[1]] = rating
-          }
-        }
-      }
+      let R = applyRatingByTag(1984, events, prefs, 'P', 1, 2)
       return R
     }
 
   }
 }
 
-function applyRatingByTag(rating : types.Rating, events : NDKEvent[], tag = "P") : types.R{
+function applyRatingByTag(kind: number, events : NDKEvent[], prefs? : types.ParamsObject, tag = "P", rateeindex = 1, scoreindex? : number) : types.R {
+  prefs = {...this.defaults[kind], ...prefs}
   let R : types.R = {}
+  let rating = {
+    // apply a single score for all events, if indicated in prefs.score
+    score : prefs?.score as number || 0,
+    confidence : prefs?.confidence as number || .5,
+    context : ['grapevine.my', 'nostr', kind.toString()]
+  }
   for(let e in events){
-    for(let tag in events[e].tags){
-      if(tag[0] == "P"){
-        R[events[e].pubkey][tag[1]] = rating
+    for(let t in events[e].tags){
+      if(events[e].tags[t][0] == tag){
+        // apply a custom score per tag according to scoreindex and prefs
+        if(scoreindex && prefs) rating.score = prefs[events[e].tags[t][scoreindex]] as unknown as number || 0
+        R[events[e].pubkey][events[e].tags[t][rateeindex]] = rating
       }
     }
   }
