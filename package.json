@@ -22,8 +22,8 @@
     "url": "https://github.com/Pretty-Good-Freedom-Tech/graperank/issues"
   },
   "homepage": "https://github.com/Pretty-Good-Freedom-Tech/graperank#readme",
-  "devDependencies": {},
   "dependencies": {
-    "@nostr-dev-kit/ndk": "^2.10.0"
+    "@nostr-dev-kit/ndk": "^2.10.0",
+    "ws": "^8.18.0"
   }
 }

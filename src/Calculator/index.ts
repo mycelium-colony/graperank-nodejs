@@ -13,6 +13,7 @@ export function calculate ( ratings : types.Rating[], request : types.EngineRequ
 
   for(let r in ratings){
     rating = ratings[r]
+    // console.log("GrapeRank : Calculate : scorecard for ratee : ", rating.ratee)
     // Step 0 : initialize or Retrieve a ScorecardCalculator for each ratee in ratings
     calculators[rating.ratee] = calculators[rating.ratee] || new ScorecardCalculator({
       observer : request.observer,
@@ -80,13 +81,15 @@ class ScorecardCalculator {
 
   calculate(params : types.EngineParams){
     // TODO if weights < 0 = "bots and bad actors" ... 
-    // maybe we shoudl store a weighted blacklist of 'rejected'?
+    // maybe we should store a weighted blacklist of 'rejected'?
     if(!this.card.calculated && this.sums.weights > params.minweight){
       const average = this.sums.products / this.sums.weights
       this.card.confidence = this.calculateConfidence(params.rigor)
       this.card.score = average * this.card.confidence
       this.card.calculated = new Date().valueOf()
     }
+    if(this.card.score && this.card.score > 0)
+    console.log("GrapeRank : Calculate : score : ", this.card.score)
   }
 
   private calculateConfidence(rigor? : number){

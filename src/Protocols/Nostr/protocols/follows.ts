@@ -1,18 +1,18 @@
 import { NostrInterpreter, applyRatingsByTag } from "../classes.ts";
 import * as types from "../../../types.ts"
-import { NDKEvent } from "@nostr-dev-kit/ndk";
+import { Event as NostrEvent} from 'nostr-tools/core'
 
 interface FollowsParams extends types.ProtocolParams {
 
 }
 
-export const NostrFollowsProtocol = new NostrInterpreter<FollowsParams>(
+export const follows = new NostrInterpreter<FollowsParams>(
   "follows", [3],
   {
     score : 1,
     confidence : .5
   },
-  (events : Set<NDKEvent>, params : FollowsParams) : types.RatingsList => {
-    return applyRatingsByTag(events,params)
+  (events : Set<NostrEvent>, params : FollowsParams) : Promise<types.RatingsList> => {
+    return applyRatingsByTag(events,follows)
   }
 )

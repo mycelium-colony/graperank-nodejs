@@ -17,7 +17,7 @@ export interface Interpreter {
   // a callback to fetch data. called by InterpretationAPI
   fetchData(authors:types.userId[], filter? : object) : Promise<void>
   // a callback for interpreting data. called by InterpretationAPI
-  interpret(params? : types.ProtocolParams) : types.RatingsList
+  interpret(params? : types.ProtocolParams) : Promise<types.RatingsList>
 }
 
 /******* DEMO *********

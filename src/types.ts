@@ -36,7 +36,7 @@ export type InterpreterRequest = {
   domain? : string,
   source : slug // "nostr"
   protocol : slug // "follows" || "mutes" || "reports"
-  params : ProtocolParams
+  params? : ProtocolParams
   authors? : userId[] // optional alist of userId
 }
 export type ProtocolParams = {

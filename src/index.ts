@@ -1,9 +1,9 @@
-import * as Calculator from "./Calculator";
-import * as Interpreter from "./Interpreter";
+import {calculate} from "./Calculator";
+import {interpret} from "./Interpreter";
 import * as types from "./types";
 
 
-class GrapeRank {
+export class GrapeRank {
   private cache? : types.Scorecard[]
   private params : types.EngineParams = {
     // default infulence score 
@@ -18,18 +18,18 @@ class GrapeRank {
 
   constructor(
     private request : types.EngineRequest,
-    private fromcache : boolean = true
+    private fetchcache : boolean = true
   ){
+    console.log("GrapeRank : initializing ")
     this.params = {...this.params, ...request.params}
   }
 
   async get(){
-    if(this.fromcache) {
+    if(this.fetchcache) {
       this.cache = await this.fetch();
     }
     if(!this.cache){
       await this.generate()
-      this.store()
     }
     return this.cache
 
@@ -39,16 +39,14 @@ class GrapeRank {
     return []
   }
 
-  async store(){
+  async generate() {
+    let authors = this.authors
 
-  }
-
-  async generate() : Promise<types.Scorecard[]>{
-
-    const ratings : types.RatingsList = await Interpreter.interpret(this.authors, this.request.interpretors)
+    console.log("GrapeRank : calling interpret with " +authors.length+ " authors ...")
+    const ratings : types.RatingsList = await interpret(authors, this.request.interpretors)
     // TODO what if new authors are "discovered" by interpretor
-    Calculator.calculate(ratings, this.request, this.params)
-    return []
+    console.log("GrapeRank : calculating scorecards for ratings ...")
+    this.cache  = calculate(ratings, this.request, this.params)
   }
 
   // private get scores() : types.Scorecard[] {

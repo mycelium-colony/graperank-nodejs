@@ -1,6 +1,6 @@
 import { NostrInterpreter, applyRatingsByTag } from "../classes.ts";
 import * as types from "../../../types.ts"
-import { NDKEvent } from "@nostr-dev-kit/ndk";
+import { Event as NostrEvent} from 'nostr-tools/core'
 
 
 interface ReportsParams extends types.ProtocolParams {
@@ -14,7 +14,7 @@ interface ReportsParams extends types.ProtocolParams {
   other : types.oneorzero, // for reports that don't fit in the above categories
 }
 
-export const NostrReportsProtocol = new NostrInterpreter<ReportsParams>(
+export const reports = new NostrInterpreter<ReportsParams>(
   "reports", [1984],
   {
     confidence : .5,
@@ -26,7 +26,7 @@ export const NostrReportsProtocol = new NostrInterpreter<ReportsParams>(
     impersonation : 0, // someone pretending to be someone else
     other : 0, // for reports that don't fit in the above categories
   },
-  (events : Set<NDKEvent>, params : ReportsParams) : types.RatingsList => {
-    return applyRatingsByTag(events,params, 'P', 1, 2)
+  (events : Set<NostrEvent>, params : ReportsParams) : Promise<types.RatingsList> => {
+    return applyRatingsByTag(events,reports, 'P', 1, 2)
   }
 )
