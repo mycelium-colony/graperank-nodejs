@@ -7,11 +7,12 @@ export class GrapeRank {
   private cache? : types.Scorecard[]
   private params : types.EngineParams = {
     // default infulence score 
-    score : 1,
+    // score : 1,
     // incrementally decrease influence weight
     attenuation : .5,
-    // factor for calculating confidence
-    rigor : 1,
+    // factor for calculating confidence 
+    // MUST be bellow 1 or confidence will ALWAYS be 0
+    rigor : .25,
     // minimum weight for scorecard to be calculated
     minweight : 0
   }
@@ -43,9 +44,12 @@ export class GrapeRank {
     let authors = this.authors
 
     console.log("GrapeRank : calling interpret with " +authors.length+ " authors ...")
+
     const ratings : types.RatingsList = await interpret(authors, this.request.interpretors)
+
     // TODO what if new authors are "discovered" by interpretor
-    console.log("GrapeRank : calculating scorecards for ratings ...")
+    console.log("GrapeRank : calling calculate with "+ratings.length+" ratings and "+this.request.input?.length+ " scorecards ...")
+
     this.cache  = calculate(ratings, this.request, this.params)
   }
 

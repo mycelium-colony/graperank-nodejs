@@ -47,7 +47,7 @@ export type ProtocolParams = {
 }
 export type EngineParams = {
   // default infulence score 
-  score : number 
+  // score : number 
   // incrementally decrease influence weight
   attenuation : number  // 0 -1 
   // factor for calculating confidence

@@ -88,7 +88,7 @@ export async function  applyRatingsByTag(events : Set<NostrEvent>, protocol : No
   // loop through all events to find tags for making new ratings
   for(const event of events) {
     eventindex ++
-    console.log("GrapeRank : applyRatingsByTag : proccessing event "+eventindex+"/"+numevents+" with " + event.tags.length + " tags")
+    // console.log("GrapeRank : applyRatingsByTag : proccessing event "+eventindex+"/"+numevents+" with " + event.tags.length + " tags")
     let eventratings : types.RatingsList = []
     // loop through all tags of each event to find the ones to make ratings from
     if(!!event.tags && event.tags.length < 10000){
@@ -114,7 +114,7 @@ export async function  applyRatingsByTag(events : Set<NostrEvent>, protocol : No
           numskipped ++
         }
       }
-      console.log("GrapeRank : applyRatingsByTag : event processed : ", +numratings+ " tags rated : ",  +numskipped+ " tags skipped")
+      // console.log("GrapeRank : applyRatingsByTag : event processed : ", +numratings+ " tags rated : ",  +numskipped+ " tags skipped")
     }else{
       console.log("GrapeRank : applyRatingsByTag : event not processed")
     }
