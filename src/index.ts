@@ -3,9 +3,9 @@ import {interpret} from "./Interpreter";
 import * as types from "./types";
 
 
-export class GrapeRank {
+export class GrapeRank implements Required<types.EngineRequest>{
   private cache? : types.Scorecard[]
-  private params : types.EngineParams = {
+  static params : types.EngineParams = {
     // default infulence score 
     // score : 1,
     // incrementally decrease influence weight
@@ -17,12 +17,22 @@ export class GrapeRank {
     minweight : 0
   }
 
+  observer: types.userId;
+  context: string;
+  input: types.Scorecard[];
+  interpretors: types.InterpreterRequest[];
+  params: types.EngineParams;
+
   constructor(
-    private request : types.EngineRequest,
+    request : types.EngineRequest,
     private fetchcache : boolean = true
   ){
     console.log("GrapeRank : initializing ")
-    this.params = {...this.params, ...request.params}
+    this.observer = request.observer
+    this.context = request.context
+    this.input = request.input || []
+    this.interpretors = request.interpretors || []
+    this.params = {...GrapeRank.params, ...request.params}
   }
 
   async get(){
@@ -45,12 +55,12 @@ export class GrapeRank {
 
     console.log("GrapeRank : calling interpret with " +authors.length+ " authors ...")
 
-    const ratings : types.RatingsList = await interpret(authors, this.request.interpretors)
+    const ratings : types.RatingsList = await interpret(authors, this.interpretors)
 
     // TODO what if new authors are "discovered" by interpretor
-    console.log("GrapeRank : calling calculate with "+ratings.length+" ratings and "+this.request.input?.length+ " scorecards ...")
+    console.log("GrapeRank : calling calculate with "+ratings.length+" ratings and "+this.input?.length+ " scorecards ...")
 
-    this.cache  = calculate(ratings, this.request, this.params)
+    this.cache  = calculate(ratings, this)
   }
 
   // private get scores() : types.Scorecard[] {
@@ -59,10 +69,10 @@ export class GrapeRank {
 
   private get authors() : types.userId[]{
     const users : types.userId[] = []
-    for(let s in this.request.input){
-      users.push(this.request.input[s].subject)
+    for(let s in this.input){
+      if(this.input[s].subject) users.push(this.input[s].subject)
     }
-    return users || [this.request.observer]
+    return users || [this.observer]
   }
 }
 
