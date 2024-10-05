@@ -2,145 +2,157 @@ import { GrapeRank } from ".."
 import * as types from "../types"
 import { Grapevine } from "./classes"
 
-const sampleid = "df67f9a7e41125745cbe7acfbdcd03691780c643df7bad70f5d2108f2d4fc200"
+let engine : GrapeRank
+let ratings : types.Rating[] 
+const ratercards : Map<types.userId,types.Scorecard> = new Map()
+const calculators : Map<types.elemId,ScorecardCalculator> = new Map()
+
 /**
  * Calculate new scorecards from interpreted ratings and input scorecards
  */
-export function calculate ( ratings : types.Rating[], engine : GrapeRank) : types.Scorecard[] {
+export function calculate ( R : types.Rating[], E : GrapeRank) : types.Scorecard[] {
 
-  let rating : types.Rating
-  let rater : types.userId
-  let ratee : types.elemId
-  let ratercards : Map<types.userId,types.Scorecard> = new Map()
-  let calculators : Map<types.elemId,ScorecardCalculator> = new Map()
-  let scorecards : Map<types.elemId,types.Scorecard> = new Map()
+  engine = E
+  ratings = R
+  let scorecards : types.Scorecard[] = []
   let iteration = 0, maxiterations = 8
+  console.log("GrapeRank : Calculator : instantiated with ",ratings.length," ratings and ",engine.input.length," input scorecards.")
 
+  // setup
+  for(let r in ratings){
+    let rating = ratings[r]
+    let rater = rating.rater
+    let ratee = rating.ratee
+
+    // STEP A : get rater influence
+    // retrieve and reference the rater from input scorecards
+    if(!ratercards.get(rater)){
+      let ratercard = getScorecard(rater as string)
+      if(ratercard) ratercards.set(rater, ratercard)
+    }
+
+    // STEP B : initialize ratee scorecard
+    // Retrieve or create a ScorecardCalculator for each ratee in ratings
+    if(!calculators.get(ratee)){
+      let calculator = new ScorecardCalculator( ratee )
+      if(calculator) calculators.set(ratee, calculator)
+    }
+  }
+  console.log("GrapeRank : Calculator : setup with ",ratercards.size," ratercards and ",calculators.size," calculators.")
+
+  // iterate
   while(iteration < maxiterations){
     iteration ++
-
-    for(let r in ratings){
-      rating = ratings[r]
-      rater = rating.rater
-      ratee = rating.ratee
-
-      // console.log("GrapeRank : Calculate : scorecard for ratee : ", rating.ratee)
-      // STEP A : get rater influence
-      // retrieve and reference the rater from input scorecards
-      ratercards[rater] = ratercards[rater] || getScorecard({
-        observer : engine.observer,
-        context : engine.context,
-        subject: rater
-      }, engine )
-
-      // STEP B : initialize ratee scorecard
-      // Retrieve or create a ScorecardCalculator for each ratee in ratings
-      calculators[ratee] = calculators[ratee] || new ScorecardCalculator({
-        observer : engine.observer,
-        context : engine.context,
-        subject : ratee
-      }, engine.params )
-
-      // STEP C : calculate sums
-      // Add rater's rating to the sum of weights & products for the ratee scorecard
-      calculators[ratee].sum(
-        engine.observer,
-        rating, 
-        ratercards[rater]
-      )
-    }
-
-    // for(let rater in ratercards){
-    //   console.log("GrapeRank : Calculator : for rater score", ratercards[rater].score)
-    // } 
-
-    // STEP D : calculate influence
-    // calculate final influence and conficdence for each ratee scorecard
-    for(let r in calculators){
-      calculators[r].calculate()
-      if(calculators[r].scorecard?.subject && calculators[r].scorecard?.score) 
-        // if(calculators[r].scorecard.score > 0) 
-          scorecards.set(calculators[r].scorecard.subject as string, calculators[r].scorecard)
-    }
-
-    // LOG iteration
-    logIteration(scorecards, iteration)
-
-    // STEP F : update rater scores
-    for(let rater in ratercards){
-      if(calculators[rater]?.scorecard && ratercards[rater].score != calculators[rater].scorecard.score){
-        console.log("GrapeRank : Calculator : updating rater card", ratercards[rater].score , " -> " , calculators[rater].scorecard.score)
-        ratercards[rater].score = calculators[rater].scorecard.score
-      }
-    }
-
+    iterate(iteration)
   }
-  return [...scorecards.values()]
+
+  // output
+  calculators.forEach((calculator) => {
+    if(calculator.scorecard?.score) 
+        scorecards.push(calculator.scorecard)
+  })
+
+  console.log("GrapeRank : Calculator : output : ",scorecards.length," scorecards.")
+  return scorecards
 }
 
-// export function iterate(scorecards : types.Scorecard[], request : types.EngineRequest, engineparams : types.EngineParams) : types.Scorecard[] {
 
 
-// }
+function iterate( iteration : number ) : void {
+  console.log("------------ BEGIN ITERATION --------------------")
+  
+  // STEP C : calculate sums
+  // Add rater's rating to the sum of weights & products for the ratee scorecard
+  let nummissingratercards = 0
+  for(let r in ratings){
+    let calculator = calculators.get(ratings[r].ratee)
+    let ratercard = ratercards.get(ratings[r].rater)
+    if(calculator) {
+      if(!ratercard) nummissingratercards++
+      calculator.sum( ratings[r], ratercard)
+    }
+  }
+  if(nummissingratercards) console.log("GrapeRank : Calculator : ",nummissingratercards," ratercards not found")
+
+  // STEP D : calculate influence
+  // calculate final influence and conficdence for each ratee scorecard
+  calculators.forEach( calculator => calculator.calculate() )
+    
+  // LOG iteration
+  logScoresForIteration(iteration)
+
+  // STEP F : update rater scores
+  // update ratercard score with new score from calculator
+  let numupdated = 0
+  ratercards.forEach(( ratercard ) => {
+    let ratee = ratercard.subject
+    if( ratee ){
+      let calculator = calculators.get(ratee as string)
+      if(calculator?.scorecard?.score != undefined ){
+        if(calculator.scorecard.score != ratercard.score){ 
+          ratercard.score = calculator.scorecard.score 
+          numupdated ++
+        }
+      }
+    }
+  })
+  console.log("GrapeRank : Calculator : updated ",numupdated," of ",ratercards.size," ratercards.")
+  console.log("------------ END ITERATION --------------------")
+
+}
+
+
 
 class ScorecardCalculator {
 
-  get scorecard(){
-    if(this.card.calculated)
-      return this.card
-  }
+  readonly scorecard : types.Scorecard = {}
 
-  private card : types.Scorecard = {}
+  get calculated(){ 
+    return this.scorecard.calculated ? true : false
+  }
 
   private sums : types.CalculatorSums = {
     weights : 0,
     products : 0
   }
 
-  private params : types.EngineParams
-
-  constructor(keys : types.ScorecardKeys, params : types.EngineParams){
-    this.card = {...keys}
-    this.params = params
+  constructor(subject : types.elemId){
+    this.scorecard = {
+      subject,
+      observer : engine.observer,
+      context : engine.context,
+    }
   }
 
   // STEP C : calculate sums
   // calculate sum of weights & sum of products
-  sum( observer : types.userId, rating : types.Rating, ratercard? : types.Scorecard){
+  sum( rating : types.Rating, ratercard? : types.Scorecard){
     // determine rater influence
     let influence = ratercard?.score !== undefined ? ratercard.score : 
-    ratercard?.subject == observer ? 1 : 0
+    ratercard?.subject == engine.observer ? 1 : 0
     let weight = influence * rating.confidence; 
     // no attenuation for observer
-    if (rating.rater != observer) 
-      weight = weight * (this.params.attenuation);
+    if (rating.rater != engine.observer) 
+      weight = weight * (engine.params.attenuation);
     // add to sums
     this.sums.weights += weight
     this.sums.products += weight * rating.score
-    // if(rater?.subject == sampleid){
-    //   console.log("GrapeRank : Calculate : sample card subject : ",this.card.subject)
-    //   console.log("GrapeRank : Calculate : sample card sums : ",this.sums)
-    // }
+
   }
 
   // STEP D : calculate influence
   calculate(){
     // TODO if weights < 0 = "bots and bad actors" ... 
     // maybe we should store a weighted blacklist of 'rejected'?
-    if(!this.card.calculated){
-      if(this.sums.weights > this.params.minweight){
+    if(!this.scorecard.calculated){
+      if(this.sums.weights > (engine.params.minweight || 0)){
         const average = this.sums.products / this.sums.weights
         // STEP E : calculate confidence
-        this.card.confidence = this.calculateConfidence(this.params.rigor)
-        this.card.score = average * this.card.confidence
-        this.card.calculated = new Date().valueOf()
-        // console.log("GrapeRank : Calculate : card calculated : ", this.card)
-      }else{
-        // console.log("GrapeRank : Calculate : weight is bellow min for ", this.card)
+        this.scorecard.confidence = this.calculateConfidence(engine.params.rigor)
+        this.scorecard.score = average * this.scorecard.confidence
+        this.scorecard.calculated = new Date().valueOf()
       }
     }
-    // if(this.card.score && this.card.score > 0)
-    // console.log("GrapeRank : Calculate : score : ", this.card.score)
   }
 
   // STEP E : calculate confidence
@@ -158,15 +170,12 @@ class ScorecardCalculator {
 
 
 
-// STEP A : get rater influence
-function getScorecard(keys : Partial<types.ScorecardKeys>, request:types.EngineRequest) : types.Scorecard | undefined{
-
+// STEP A : get rater influence from input scorecards
+function getScorecard(subject : types.elemId) : types.Scorecard | undefined{
   let scorecard : types.Scorecard | undefined = undefined
-
-  for(let s in request.input){
-    if((keys.observer == request.input[s].observer || undefined)
-      && keys.subject == request.input[s].subject) {
-      scorecard =  request.input[s]
+  for(let s in engine.input){
+    if(subject == engine.input[s].subject) {
+      scorecard =  engine.input[s]
     }
   }
   return scorecard
@@ -177,6 +186,33 @@ function getRating(rater:types.userId, ratings:types.RatingsList = []) : types.R
     if(rater == ratings[r].rater) return ratings[r]
   }
 }
+
+
+// LOG iteration
+function logScoresForIteration( iteration : number){
+
+    let scorecards : types.Scorecard[] = [] 
+    let increment  = .1
+    let scores : number[] 
+    let v = "", ov = ""
+
+    console.log("GrapeRank : Calculator : iteration " + iteration)
+
+    calculators.forEach((calculator) => {
+      if(calculator.scorecard) scorecards.push( calculator.scorecard)
+    })
+
+    scores = countScorecardsByScore(scorecards, increment)
+    // console.log("scores counted", scores)
+
+    for(let i in scores){
+      ov = v || "0"
+      v = ((i as unknown as number) * increment).toPrecision(1)
+      console.log("number of cards having scores from "+ ov +" to " +v+ " = ", scores[i])
+    }
+    console.log("TOTAL number scorecards = ",scorecards.length)  
+}
+
 
 function countScorecardsByScore(scorecards : types.Scorecard[], increment : number = 10 ) : number[] {
   let grouped = groupScorecardsByScore(scorecards,increment)
@@ -200,20 +236,4 @@ function groupScorecardsByScore(scorecards : types.Scorecard[], increment : numb
     }
   }
   return group
-}
-
-
-// LOG iteration
-function logIteration(scorecards : Map<types.elemId,types.Scorecard> , iteration : number){
-    console.log("--------------------------------")
-    console.log("GrapeRank : Calculator : iteration " + iteration)
-    let increment = .1
-    let count = countScorecardsByScore([...scorecards.values()], increment)
-    let v = "", ov = ""
-    for(let i in count){
-      ov = v || "0"
-      v = ((i as unknown as number) * increment).toPrecision(1)
-      console.log("number of cards having scores from "+ ov +" to " +v+ " = ", count[i])
-    }
-    console.log("TOTAL number scorecards = ",scorecards.size)  
 }
