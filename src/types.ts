@@ -35,8 +35,7 @@ export type EngineRequest = {
 }
 export type InterpreterRequest = {
   domain? : string,
-  source : slug // "nostr"
-  protocol : slug // "follows" || "mutes" || "reports"
+  protocol : slug // '[source]-[dataype]' : 'nostr-follows' 
   params? : ProtocolParams
   authors? : userId[] // optional alist of userId
 }
@@ -73,7 +72,7 @@ export type DevParams = {
 export type EngineResponse = {
   observer? : userId
   output? : Scorecard[]
-  interpretors? : {[source : slug] : {[protocol : slug] : JsonSchema}}
+  interpretors? : {[protocol : slug] : JsonSchema}
   calculator? : JsonSchema
 }
 export type JsonSchema = {
@@ -132,7 +131,7 @@ export type Rating = {
   // observer? : userId,
   rater : userId,
   ratee : elemId,
-  context : slug // reference to a GrapevineContext of user prefs
+  protocol : slug // '[source]-[dataype]' : 'nostr-follows' 
   confidence : number // 0 - 1
   score : number // 0 or 1 / percent
 }

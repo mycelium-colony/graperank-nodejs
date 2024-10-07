@@ -2,10 +2,6 @@ import * as types from "../types.ts"
 
 
 export interface Interpreter {
-  // url-safe name of the source : "nostr"
-  readonly source : types.slug;
-  // url-safe name of the protocol : "follows"
-  readonly protocol : types.slug
   // input params for each instance
   readonly params : types.ProtocolParams
   // outputs JsonDoc formatted schema of allowed params for API documentation of each instance
@@ -23,18 +19,17 @@ export interface Interpreter {
 /******* DEMO *********
 
 // DEMO implementaiton of a source interpretor
-class DemoInterpreter<ParamsType extends types.ProtocolParams> implements Interpreter {
+class MyDemoInterpreter<ParamsType extends types.ProtocolParams> implements Interpreter {
   params:ParamsType
-  readonly source : 'demo'
+  dataset : Set<any>
 
   constructor(
-    readonly protocol : types.slug,
     readonly defaults : ParamsType,
-    readonly interpret : (data:Set<any>,  params : ParamsType) => types.RatingsList,
+    readonly interpret : (params : ParamsType) => Promise<types.RatingsList>,
   ){}
 
   async fetchData(authors:types.userId[]){
-    let data = new Set()
+    this.dataset = new Set()
     // fetch data from network
     return ;
   }
@@ -44,19 +39,21 @@ class DemoInterpreter<ParamsType extends types.ProtocolParams> implements Interp
 interface MyProtocolParams extends types.ProtocolParams {
   // add additional params here
 }
-const DemoMyProtocol = new DemoInterpreter<MyProtocolParams> (
-  "MyProtocol",
+const myprotocol = new MyDemoInterpreter<MyProtocolParams> (
   {   foo : true  },
-  (data: Set<any>, params?: MyProtocolParams) : types.RatingsList => {
+  async (params?: MyProtocolParams) => {
     let R : types.RatingsList = []
     return R
   }
 )
 
-// DEMO use of a protocol processor
+// DEMO export instances
+export const mydemo = { myprotocol }
+
+// DEMO use a protocol instance
 const myUserList = []
 const myParams : MyProtocolParams = {}
-const myUserDataSet = await DemoMyProtocol.fetchData(myUserList)
-const myUserRatings = DemoMyProtocol.interpret(myUserDataSet,myParams)
+const myUserDataSet = await mydemo.myprotocol.fetchData(myUserList)
+const myUserRatings = mydemo.myprotocol.interpret(myParams)
 
 /*****************************************/

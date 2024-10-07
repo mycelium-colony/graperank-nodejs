@@ -29,28 +29,26 @@ const relays = [
 
 
 export class NostrInterpreter<ParamsType extends types.ProtocolParams> implements Interpreter {
-  readonly source = 'nostr'
   params : ParamsType
   dataset : Set<NostrEvent>
   interpret : (params : ParamsType) => Promise<types.RatingsList>
 
   constructor( 
-    readonly protocol : types.slug,
     readonly kinds : number[],
     readonly defaults : ParamsType,
     callback : (events:Set<NostrEvent>, params : ParamsType) => Promise<types.RatingsList>,
   ){
     this.interpret = async (params:ParamsType) => {
-      console.log("GrapeRank : nostr-" +this.protocol+ " : interpreting " +this.dataset.size+ " events")
+      console.log("GrapeRank : nostr protocol : interptreting " +this.dataset.size+ " events")
       this.params = {...this.defaults, ...params}
       let ratings = await callback(this.dataset, this.params)
-      console.log("GrapeRank : nostr-" +this.protocol+ " : interpreted "+ratings.length+" ratings")
+      console.log("GrapeRank : nostr protocol : interptreting "+ratings.length+" ratings")
       return ratings
     }
   }
   
   async fetchData(authors : string[], filter?: NostrFilter) : Promise<void> {
-    console.log("GrapeRank : nostr-" +this.protocol+ " : fetchData()")
+    console.log("GrapeRank : nostr protocol : fetchData()")
     // TODO fix for duplicate fetching of kinds
     let NostrFilter : NostrFilter = {
       ...filter,
@@ -60,11 +58,11 @@ export class NostrInterpreter<ParamsType extends types.ProtocolParams> implement
 
     await fetchEvents(NostrFilter).then((events)=>{
       this.dataset = events
-      console.log("GrapeRank : nostr-" +this.protocol+ " : fetched " +this.dataset.size+ " records")
+      console.log("GrapeRank : nostr protocol : fetched " +this.dataset.size+ " records")
     }).catch((error)=>{
-      console.log("GrapeRank : nostr-" +this.protocol+ " :  ERROR ", error)
+      console.log("GrapeRank : nostr protocol : ERROR ", error)
     }).finally(()=>{
-      console.log("GrapeRank : nostr-" +this.protocol+ " :  fetchData() complete ")
+      console.log("GrapeRank : nostr protocol : fetchData() complete ")
     })
     // this.dataset = await ndk.fetchEvents(NostrFilter,{},ndkrelayset)
     return
@@ -73,7 +71,7 @@ export class NostrInterpreter<ParamsType extends types.ProtocolParams> implement
 }
 
 export async function  applyRatingsByTag(events : Set<NostrEvent>, protocol : NostrInterpreter<any>, tag = "p", rateeindex = 1, scoreindex? : number) : Promise<types.RatingsList> {
-  console.log("GrapeRank : applyRatingsByTag()")
+  console.log("GrapeRank : nostr protocol : applyRatingsByTag()")
   let ratings : types.RatingsList = [],
     numevents : number = events.size, 
     eventindex : number = 0, 
@@ -83,7 +81,6 @@ export async function  applyRatingsByTag(events : Set<NostrEvent>, protocol : No
       // apply a single score for all ratings, as indicated in params.score
       score : protocol.params?.score as number || 0,
       confidence : protocol.params?.confidence as number || .5,
-      context : "nostr-"+ protocol.protocol
     }
   // loop through all events to find tags for making new ratings
   for(const event of events) {
@@ -116,12 +113,12 @@ export async function  applyRatingsByTag(events : Set<NostrEvent>, protocol : No
       }
       // console.log("GrapeRank : applyRatingsByTag : event processed : ", +numratings+ " tags rated : ",  +numskipped+ " tags skipped")
     }else{
-      console.log("GrapeRank : applyRatingsByTag : event not processed")
+      console.log("GrapeRank : nostr protocol : applyRatingsByTag : event not processed")
     }
     // handle big arrays with care
     if(eventratings) ratings = await mergeBigArrays(ratings, eventratings)
   }
-  console.log("GrapeRank : applyRatingsByTag : returned ", ratings.length, " ratings")
+  console.log("GrapeRank : nostr protocol : applyRatingsByTag : returned ", ratings.length, " ratings")
   return ratings
 }
 
@@ -156,7 +153,7 @@ async function fetchEvents(
     return new Promise((resolve) => {
         const events: Map<string, NostrEvent> = new Map();
 
-        console.log("GrapeRank : nostr : fetchEvents() : calling ndk.subscribe() ")
+        console.log("GrapeRank : nostr protocol : fetchEvents() : calling fetch()")
         // const relaySetSubscription = ndk.subscribe(
         //     filters,
         //     { ...(opts || {}), closeOnEose: true },

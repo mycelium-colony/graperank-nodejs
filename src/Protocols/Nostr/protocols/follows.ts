@@ -7,7 +7,7 @@ interface FollowsParams extends types.ProtocolParams {
 }
 
 export const follows = new NostrInterpreter<FollowsParams>(
-  "follows", [3],
+  [3],
   {
     score : 1,
     confidence : .5

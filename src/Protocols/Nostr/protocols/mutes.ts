@@ -7,7 +7,7 @@ interface MutesParams extends types.ProtocolParams {
 }
 
 export const mutes = new NostrInterpreter<MutesParams>(
-  "mutes", [10000],
+  [10000],
   {
     score : 0,
     confidence : .5

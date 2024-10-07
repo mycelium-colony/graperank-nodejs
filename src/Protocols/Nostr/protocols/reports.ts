@@ -15,7 +15,7 @@ interface ReportsParams extends types.ProtocolParams {
 }
 
 export const reports = new NostrInterpreter<ReportsParams>(
-  "reports", [1984],
+  [1984],
   {
     confidence : .5,
     nudity : 0, // depictions of nudity, porn, etc.
