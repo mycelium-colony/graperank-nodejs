@@ -1,6 +1,5 @@
 import {Interpreter} from "../classes.ts"
 import * as types from "../../types.ts"
-// import NDK, { NostrEvent, NostrFilter, NDKRelay, NDKRelaySet, NDKSubscriptionOptions, NostrEvent } from "@nostr-dev-kit/ndk";
 import { Event as NostrEvent} from 'nostr-tools/core'
 import { Filter as NostrFilter} from 'nostr-tools/filter'
 import { SimplePool } from 'nostr-tools/pool'
@@ -14,18 +13,6 @@ const relays = [
   "wss://profiles.nostr1.com",
   "wss://relay.damus.io"
 ]
-// // const ndk = new NDK()
-// const ndk = new NDK({explicitRelayUrls : relays})
-// await ndk.connect().then(()=>{
-//   // console.log("GrapeRank : nostr : ndk connected")
-// })
-
-
-// const relayset : Set<NDKRelay> = new Set()
-// for(let u in relays){
-//   relayset.add(new NDKRelay(relays[u],undefined,ndk))
-// }
-// const ndkrelayset = new NDKRelaySet(relayset,ndk)
 
 
 export class NostrInterpreter<ParamsType extends types.ProtocolParams> implements Interpreter {
@@ -141,28 +128,19 @@ export type NostrUserCache = Record<
   }>
 
 
-
-
-
+/**
+ * Adapted from NDK
+ * @param filters 
+ * @returns 
+ */
 async function fetchEvents(
-    filters: NostrFilter | NostrFilter[],
-    // opts?: NDKSubscriptionOptions,
-    // relaySet?: NDKRelaySet
+    filters: NostrFilter | NostrFilter[]
 ): Promise<Set<NostrEvent>> {
     filters = filters instanceof Array ? filters : [filters]
     return new Promise((resolve) => {
         const events: Map<string, NostrEvent> = new Map();
 
         console.log("GrapeRank : nostr protocol : fetchEvents() : calling fetch()")
-        // const relaySetSubscription = ndk.subscribe(
-        //     filters,
-        //     { ...(opts || {}), closeOnEose: true },
-        //     relaySet,
-        //     false
-        // );
-        // relaySetSubscription.on("closed", (relay, string)=>{
-        //   console.log("GrapeRank : nostr : fetchEvents() : subscription closed : ", relay, string)
-        // })
 
         const onEvent = (event: NostrEvent) => {
           // console.log("GrapeRank : nostr : fetchEvents() : recieved kind-"+event.kind, event.id)
@@ -178,24 +156,6 @@ async function fetchEvents(
             // event.ndk = ndk;
             events.set(dedupKey, event);
         };
-
-        
-
-        // // We want to inspect duplicated events
-        // // so we can dedup them
-        // relaySetSubscription.on("event", onEvent);
-        // // relaySetSubscription.on("event:dup", (rawEvent: NostrEvent) => {
-        // //     const NostrEvent = new NostrEvent(undefined, rawEvent);
-        // //     onEvent(NostrEvent)
-        // // });
-
-        // relaySetSubscription.on("eose", () => {
-        //     resolve(new Set(events.values()));
-        // });
-
-
-
-        // relaySetSubscription.start();
 
         const pool = new SimplePool()
 
