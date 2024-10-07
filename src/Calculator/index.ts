@@ -15,7 +15,7 @@ export function calculate ( R : types.Rating[], E : GrapeRank) : types.Scorecard
   engine = E
   ratings = R
   let scorecards : types.Scorecard[] = []
-  let iteration = 0, maxiterations = 8
+  let iteration = 0, maxiterations = E.params.iterations || 8
   console.log("GrapeRank : Calculator : instantiated with ",ratings.length," ratings and ",engine.input.length," input scorecards.")
 
   // setup
