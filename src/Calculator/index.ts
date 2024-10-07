@@ -1,6 +1,6 @@
 import { GrapeRank } from ".."
 import * as types from "../types"
-import { Grapevine } from "./classes"
+
 
 let engine : GrapeRank
 let ratings : types.Rating[] 
@@ -63,16 +63,19 @@ function iterate( iteration : number ) : void {
   
   // STEP C : calculate sums
   // Add rater's rating to the sum of weights & products for the ratee scorecard
-  let nummissingratercards = 0
+  let updatedratercards : Set<types.userId> = new Set()
   for(let r in ratings){
     let calculator = calculators.get(ratings[r].ratee)
     let ratercard = ratercards.get(ratings[r].rater)
     if(calculator) {
-      if(!ratercard) nummissingratercards++
+      if(ratercard?.calculated) {
+        updatedratercards.add(ratings[r].rater)
+        ratercard.calculated = undefined
+      }
       calculator.sum( ratings[r], ratercard)
     }
   }
-  if(nummissingratercards) console.log("GrapeRank : Calculator : ",nummissingratercards," ratercards not found")
+  console.log("GrapeRank : Calculator : ",updatedratercards.size," updated ratercards passed to calculator")
 
   // STEP D : calculate influence
   // calculate final influence and conficdence for each ratee scorecard
@@ -84,19 +87,28 @@ function iterate( iteration : number ) : void {
   // STEP F : update rater scores
   // update ratercard score with new score from calculator
   let numupdated = 0
-  ratercards.forEach(( ratercard ) => {
+  let oldinfluence : number | undefined
+  ratercards.forEach(( ratercard , rater) => {
     let ratee = ratercard.subject
     if( ratee ){
       let calculator = calculators.get(ratee as string)
       if(calculator?.scorecard?.score != undefined ){
         if(calculator.scorecard.score != ratercard.score){ 
+          oldinfluence = ratercard.score
           ratercard.score = calculator.scorecard.score 
-          numupdated ++
+          ratercard.calculated = new Date().valueOf()
+          let updatedratercard = ratercards.get(rater)
+          if(updatedratercard?.score == calculator?.scorecard?.score) {
+            numupdated ++
+            if(updatedratercard.subject == engine.dev.samplerater)
+            console.log("GrapeRank : Calculator : updated sample rater influence from ",oldinfluence," to ", updatedratercard.score)
+          }
         }
       }
     }
   })
   console.log("GrapeRank : Calculator : updated ",numupdated," of ",ratercards.size," ratercards.")
+
   console.log("------------ END ITERATION --------------------")
 
 }
@@ -127,8 +139,14 @@ class ScorecardCalculator {
   // STEP C : calculate sums
   // calculate sum of weights & sum of products
   sum( rating : types.Rating, ratercard? : types.Scorecard){
+    if(ratercard && ratercard.subject != rating.rater){
+      // do nothing if ratercard subject does not match rater
+      console.log("GrapeRank : ScorecardCalculator : WARNING ratercard.subject does not match rating.rater")
+      return
+    }
+    let oldsums = {...this.sums}
     // determine rater influence
-    let influence = ratercard?.score !== undefined ? ratercard.score : 
+    let influence = ratercard?.score !== undefined ? ratercard.score as number: 
     ratercard?.subject == engine.observer ? 1 : 0
     let weight = influence * rating.confidence; 
     // no attenuation for observer
@@ -138,6 +156,12 @@ class ScorecardCalculator {
     this.sums.weights += weight
     this.sums.products += weight * rating.score
 
+    if(this.scorecard.subject == engine.dev.sampleratee && ratercard?.subject  == engine.dev.samplerater){
+      console.log("GrapeRank : ScorecardCalculator : sample rater : influence = ", ratercard?.score as number)
+      console.log("GrapeRank : ScorecardCalculator : sample rater : rating.score = ", rating.score as number)
+      console.log("GrapeRank : ScorecardCalculator : sample rater : old scorercard.sums = ", oldsums)
+      console.log("GrapeRank : ScorecardCalculator : sample rater : new scorecard.sums = ", this.sums)
+    }
   }
 
   // STEP D : calculate influence

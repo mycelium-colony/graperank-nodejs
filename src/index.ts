@@ -22,6 +22,7 @@ export class GrapeRank implements Required<types.EngineRequest>{
   input: types.Scorecard[];
   interpretors: types.InterpreterRequest[];
   params: types.EngineParams;
+  dev : types.DevParams;
 
   constructor(
     request : types.EngineRequest,
@@ -33,6 +34,7 @@ export class GrapeRank implements Required<types.EngineRequest>{
     this.input = request.input || []
     this.interpretors = request.interpretors || []
     this.params = {...GrapeRank.params, ...request.params}
+    this.dev = request.dev || {}
   }
 
   async get(){

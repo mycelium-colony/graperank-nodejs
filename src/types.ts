@@ -31,6 +31,7 @@ export type EngineRequest = {
   // any number of interpretations may be processed in a given request.
   interpretors?: InterpreterRequest[],
   params: Partial<EngineParams>
+  dev? : Partial<DevParams>
 }
 export type InterpreterRequest = {
   domain? : string,
@@ -54,6 +55,11 @@ export type EngineParams = {
   rigor : number // 0 -1
   // minimum weight for scorecard to be calculated
   minweight : number // 0 - 1 
+}
+
+export type DevParams = {
+  samplerater? : userId,
+  sampleratee? : elemId
 }
 
 /**
