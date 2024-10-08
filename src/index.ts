@@ -14,7 +14,8 @@ export class GrapeRank implements Required<types.EngineRequest>{
     // MUST be bellow 1 or confidence will ALWAYS be 0
     rigor : .25,
     // minimum weight for scorecard to be calculated
-    minweight : 0
+    minweight : 0,
+    iterations : 8
   }
 
   observer: types.userId;
@@ -23,6 +24,7 @@ export class GrapeRank implements Required<types.EngineRequest>{
   interpretors: types.InterpreterRequest[];
   params: types.EngineParams;
   dev : types.DevParams;
+
 
   constructor(
     request : types.EngineRequest,
