@@ -54,8 +54,9 @@ export type EngineParams = {
   rigor : number // 0 -1
   // minimum weight for scorecard to be calculated
   minweight : number // 0 - 1 
-  // calculator iterations
-  iterations : number
+  // max difference between calculator iterations
+  // ZERO == most precise
+  precision : number
 }
 
 export type DevParams = {

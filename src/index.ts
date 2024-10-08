@@ -15,7 +15,9 @@ export class GrapeRank implements Required<types.EngineRequest>{
     rigor : .25,
     // minimum weight for scorecard to be calculated
     minweight : 0,
-    iterations : 8
+    // max difference between calculator iterations
+    // ZERO == most precise
+    precision : 0
   }
 
   observer: types.userId;
