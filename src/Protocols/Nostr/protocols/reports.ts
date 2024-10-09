@@ -1,4 +1,4 @@
-import { NostrInterpreter, applyRatingsByTag } from "../classes.ts";
+import { NostrProtocol, applyRatingsByTag } from "../classes.ts";
 import * as types from "../../../types.ts"
 import { Event as NostrEvent} from 'nostr-tools/core'
 
@@ -14,7 +14,7 @@ interface ReportsParams extends types.ProtocolParams {
   other : types.oneorzero, // for reports that don't fit in the above categories
 }
 
-export const reports = new NostrInterpreter<ReportsParams>(
+export const reports = new NostrProtocol<ReportsParams>(
   [1984],
   {
     confidence : .5,

@@ -1,7 +1,7 @@
 import * as types from "../types.ts"
 
 
-export interface Interpreter {
+export interface InterpretationProtocol {
   // input params for each instance
   readonly params : types.ProtocolParams
   // outputs JsonDoc formatted schema of allowed params for API documentation of each instance
@@ -19,7 +19,7 @@ export interface Interpreter {
 /******* DEMO *********
 
 // DEMO implementaiton of a source interpretor
-class MyDemoInterpreter<ParamsType extends types.ProtocolParams> implements Interpreter {
+class MyDemoInterpreter<ParamsType extends types.ProtocolParams> implements InterpretationProtocol {
   params:ParamsType
   dataset : Set<any>
 

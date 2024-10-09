@@ -1,4 +1,4 @@
-import {Interpreter} from "../classes.ts"
+import {InterpretationProtocol} from "../classes.ts"
 import * as types from "../../types.ts"
 import { Event as NostrEvent} from 'nostr-tools/core'
 import { Filter as NostrFilter} from 'nostr-tools/filter'
@@ -15,7 +15,7 @@ const relays = [
 ]
 
 
-export class NostrInterpreter<ParamsType extends types.ProtocolParams> implements Interpreter {
+export class NostrProtocol<ParamsType extends types.ProtocolParams> implements InterpretationProtocol {
   params : ParamsType
   dataset : Set<NostrEvent>
   interpret : (params : ParamsType) => Promise<types.RatingsList>
@@ -57,7 +57,7 @@ export class NostrInterpreter<ParamsType extends types.ProtocolParams> implement
 
 }
 
-export async function  applyRatingsByTag(events : Set<NostrEvent>, protocol : NostrInterpreter<any>, tag = "p", rateeindex = 1, scoreindex? : number) : Promise<types.RatingsList> {
+export async function  applyRatingsByTag(events : Set<NostrEvent>, protocol : NostrProtocol<any>, tag = "p", rateeindex = 1, scoreindex? : number) : Promise<types.RatingsList> {
   console.log("GrapeRank : nostr protocol : applyRatingsByTag()")
   let ratings : types.RatingsList = [],
     numevents : number = events.size, 

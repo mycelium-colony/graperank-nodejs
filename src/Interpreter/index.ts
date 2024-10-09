@@ -1,5 +1,5 @@
 import * as Protocols from "../Protocols"
-import { Interpreter } from "../Protocols/classes"
+import { InterpretationProtocol } from "../Protocols/classes"
 import * as types from "../types"
 import { mergeBigArrays } from "../utils"
 
@@ -57,7 +57,7 @@ function parseProtocolSlug(protocol : types.slug) : [types.slug, types.slug]{
   return tuple as [types.slug, types.slug]
 }
 
-function getProtocolInstance(source:types.slug, datatype:types.slug,) : Interpreter {
+function getProtocolInstance(source:types.slug, datatype:types.slug,) : InterpretationProtocol {
   let instance = Protocols[source][datatype]
   if(!instance.fetchData || !instance.interpret){
     throw('no protocol instance found for ' + source +"-"+ datatype)
