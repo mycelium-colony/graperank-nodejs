@@ -28,21 +28,21 @@ export type EngineRequest = {
   context : context,
   // 
   input? : Scorecard[],
-  // any number of interpretations may be processed in a given request.
-  interpretors?: InterpreterRequest[],
+  // any number of interpretation protocols may be processed in a given request.
+  protocols?: ProtocolRequest[],
   params: Partial<EngineParams>
   dev? : Partial<DevParams>
 }
-export type InterpreterRequest = {
+export type ProtocolRequest = {
   domain? : string,
-  protocol : slug // '[source]-[dataype]' : 'nostr-follows' 
+  protocol : slug // '[source]-[datatype]' : 'nostr-follows' 
   params? : ProtocolParams
   authors? : userId[] // optional alist of userId
 }
 export type ProtocolParams = {
   score? : number,
   confidence? : number,
-  depth? : number, // TODO a bunch of logic needed to implement variable depths in interpretor and growing user lists for calculator
+  iterate? : number, // TODO a bunch of logic needed to implement variable depths in interpretor and growing user lists for calculator
   [param:string] : ParamValue | undefined,
 }
 export type EngineParams = {
@@ -68,14 +68,14 @@ export type DevParams = {
  * GrapeRank Engine API Response
  * Returns `output` from engine as ScorecardValuess
  * 
- * MAY include `interpretors` and `calculator` as JsonSchema 
+ * MAY include `protocols` and `calculator` as JsonSchema 
  * parameter definitions for calling EngineRequest again,
  * IF output cannot be generated
  */
 export type EngineResponse = {
   observer? : userId
   output? : Scorecard[]
-  interpretors? : {[protocol : slug] : JsonSchema}
+  protocols? : {[protocol : slug] : JsonSchema}
   calculator? : JsonSchema
 }
 export type JsonSchema = {
@@ -97,7 +97,7 @@ export type Worldview = {
 
 export type WorldviewFIlter = {
   engine : URL // "api.grapevine.my"
-  interpretors : InterpreterRequest[]
+  protocols : ProtocolRequest[]
   calculator : EngineParams
 }
 

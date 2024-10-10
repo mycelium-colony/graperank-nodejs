@@ -23,7 +23,7 @@ export class GrapeRank implements Required<types.EngineRequest>{
   observer: types.userId;
   context: string;
   input: types.Scorecard[];
-  interpretors: types.InterpreterRequest[];
+  protocols: types.ProtocolRequest[];
   params: types.EngineParams;
   dev : types.DevParams;
 
@@ -36,7 +36,7 @@ export class GrapeRank implements Required<types.EngineRequest>{
     this.observer = request.observer
     this.context = request.context
     this.input = request.input || []
-    this.interpretors = request.interpretors || []
+    this.protocols = request.protocols || []
     this.params = {...GrapeRank.params, ...request.params}
     this.dev = request.dev || {}
   }
@@ -57,11 +57,11 @@ export class GrapeRank implements Required<types.EngineRequest>{
   }
 
   async generate() {
-    let authors = this.authors
+    let raters = this.raters
 
-    console.log("GrapeRank : calling interpret with " +authors.length+ " authors ...")
+    console.log("GrapeRank : calling interpret with " ,raters.length, " authors ...")
 
-    const ratings : types.RatingsList = await interpret(authors, this.interpretors)
+    const ratings : types.RatingsList = await interpret(raters, this.protocols)
 
     // TODO what if new authors are "discovered" by interpretor
     console.log("GrapeRank : calling calculate with "+ratings.length+" ratings and "+this.input?.length+ " scorecards ...")
@@ -73,12 +73,12 @@ export class GrapeRank implements Required<types.EngineRequest>{
   //   let scores = this.request.input || []
   // }
 
-  private get authors() : types.userId[]{
-    const users : types.userId[] = []
-    for(let s in this.input){
-      if(this.input[s].subject) users.push(this.input[s].subject)
+  private get raters() : types.userId[]{
+    const raters : types.userId[] = []
+    for(let c in this.input){
+      if(this.input[c].subject) raters.push(this.input[c].subject)
     }
-    return users || [this.observer]
+    return raters.length ? raters : [this.observer]
   }
 }
 

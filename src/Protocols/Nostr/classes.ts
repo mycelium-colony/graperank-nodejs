@@ -6,56 +6,113 @@ import { SimplePool } from 'nostr-tools/pool'
 import { useWebSocketImplementation } from 'nostr-tools/pool'
 import WebSocket from 'ws'
 useWebSocketImplementation(WebSocket)
-import {mergeBigArrays} from "../../utils.ts"
+import {mergeBigArrays, sliceBigArray} from "../../utils.ts"
 
 const relays = [
-  "wss://relay.purplepag.es",
+  "wss://purplepag.es",
   "wss://profiles.nostr1.com",
-  "wss://relay.damus.io"
+  "wss://relay.primal.net",
+  // "wss://relay.damus.io"
 ]
 
+const maxauthors = 1000
 
 export class NostrProtocol<ParamsType extends types.ProtocolParams> implements InterpretationProtocol {
   params : ParamsType
-  dataset : Set<NostrEvent>
+  dataset : Set<NostrEvent> = new Set()
   interpret : (params : ParamsType) => Promise<types.RatingsList>
 
   constructor( 
     readonly kinds : number[],
     readonly defaults : ParamsType,
-    callback : (events:Set<NostrEvent>, params : ParamsType) => Promise<types.RatingsList>,
+    readonly validate? : (events : Set<NostrEvent>, authors : types.userId[], previous? : Set<NostrEvent>) => boolean | types.userId[],
+    interpret? : (events:Set<NostrEvent>, params : ParamsType) => Promise<types.RatingsList>
   ){
     this.interpret = async (params:ParamsType) => {
       console.log("GrapeRank : nostr protocol : interptreting " +this.dataset.size+ " events")
       this.params = {...this.defaults, ...params}
-      let ratings = await callback(this.dataset, this.params)
+      let ratings = 
+        interpret ? await interpret(this.dataset, this.params) :
+        await applyRatingsByTag(this.dataset, this)
       console.log("GrapeRank : nostr protocol : interptreting "+ratings.length+" ratings")
       return ratings
     }
   }
-  
-  async fetchData(authors : string[], filter?: NostrFilter) : Promise<void> {
-    console.log("GrapeRank : nostr protocol : fetchData()")
-    // TODO fix for duplicate fetching of kinds
-    let NostrFilter : NostrFilter = {
-      ...filter,
-      kinds : this.kinds,
-      authors ,
+
+  // breaks up a large raters list into multiple authors lists 
+  // suitable for relay requests, and sends them all in parrallel
+  // returns a single promise that is resolved when all fetches are complete.
+  async fetchData(raters : Set<types.userId>, filter?: NostrFilter) : Promise<void> {
+
+    const authors : types.userId[][] = raters.size > maxauthors ? 
+      await sliceBigArray([...raters], maxauthors) : [[...raters]]
+
+    const promises : Promise<Set<NostrEvent>>[] = []
+    let promise : Promise<Set<NostrEvent>>
+
+    console.log("GrapeRank : nostr protocol : fetching events in ",authors.length, " requests for ",raters.size," raters")
+
+    for(let a in authors){
+      let fetchfilter : NostrFilter = {
+        ...filter, 
+        authors : authors[a] as string[],
+        kinds : this.kinds,
+      }
+      promise = this.fetchEventsPromise(fetchfilter, a as unknown as number)
+      promises.push(promise)
     }
 
-    await fetchEvents(NostrFilter).then((events)=>{
-      this.dataset = events
-      console.log("GrapeRank : nostr protocol : fetched " +this.dataset.size+ " records")
-    }).catch((error)=>{
-      console.log("GrapeRank : nostr protocol : ERROR ", error)
-    }).finally(()=>{
-      console.log("GrapeRank : nostr protocol : fetchData() complete ")
-    })
-    // this.dataset = await ndk.fetchEvents(NostrFilter,{},ndkrelayset)
-    return
+    await Promise.all(promises)
+
+    console.log("GrapeRank : nostr protocol : fetching complete with ", this.dataset.size, " records ")
   }
 
+  // An iterative function ... 
+  // possibly calls itself again if validation fails
+  // returns a single promise with possibly nested promises
+  private async fetchEventsPromise(filter: NostrFilter, iteration = 0, previous? : Set<NostrEvent>) : Promise<Set<NostrEvent>> {
+    if(!filter.authors) 
+      return new Promise((resolve,reject)=> reject("No authors provided"))
+
+    console.log("GrapeRank : nostr protocol : fetching events in request ",iteration, " for ",filter.authors.length, " raters")
+
+    let fetchpromise = fetchEvents(filter)
+      fetchpromise.then(async (events)=>{
+        let validation = this.validate ? this.validate(events, filter.authors as string[], previous) : true
+        let totaleventssize : number
+        try{
+
+          // FALSE validation will log error
+          if(validation === false ) {
+            throw('validaiton failed')
+          }
+
+          // TRUE validation will add events to dataset
+          events.forEach((event) => this.dataset.add(event))
+          if(validation === true){ 
+            totaleventssize = previous ? (previous.size + events.size ): events.size
+            throw("completed with " + totaleventssize + " events")
+          }
+
+          // otherwise try request again with reduced authors list
+          console.log("GrapeRank : nostr protocol : fetch request ",iteration," : requesting again")
+          await this.fetchEventsPromise(
+            {...filter, authors : validation as string[]}, 
+            iteration, events )
+
+        }catch(e){
+          console.log("GrapeRank : nostr protocol : fetch request ",iteration," : ", e)
+        }
+  
+      }).catch((error)=>{
+        console.log("GrapeRank : nostr protocol : ERROR in fetch request ", iteration, error)
+      })
+      
+    return fetchpromise
+  }
+  
 }
+
 
 export async function  applyRatingsByTag(events : Set<NostrEvent>, protocol : NostrProtocol<any>, tag = "p", rateeindex = 1, scoreindex? : number) : Promise<types.RatingsList> {
   console.log("GrapeRank : nostr protocol : applyRatingsByTag()")
@@ -103,10 +160,38 @@ export async function  applyRatingsByTag(events : Set<NostrEvent>, protocol : No
       console.log("GrapeRank : nostr protocol : applyRatingsByTag : event not processed")
     }
     // handle big arrays with care
-    if(eventratings) ratings = await mergeBigArrays(ratings, eventratings)
+    if(eventratings) ratings = await mergeBigArrays(ratings, eventratings, 10000)
   }
   console.log("GrapeRank : nostr protocol : applyRatingsByTag : returned ", ratings.length, " ratings")
   return ratings
+}
+
+
+export function validateEachEventHasAuthor( events : Set<NostrEvent>, authors : types.userId[], previous? : Set<NostrEvent> ) : boolean | types.userId[] { 
+  if(authors.length == events.size) return true
+  if(!validateOneEventIsNew(events,authors,previous)) return false
+  let authorswithoutevents = getEventsAuthors(events, authors) 
+  return authorswithoutevents.length ? authorswithoutevents : true
+}
+
+export function validateOneEventIsNew( events : Set<NostrEvent>, authors : types.userId[], previous? : Set<NostrEvent> ) : boolean | types.userId[] { 
+  if(!previous || !previous.size) return true
+  previous.forEach((pevent)=>{
+    events.forEach((newevent)=>{
+      if(pevent.id == newevent.id) return true
+    })
+  })
+  return false
+}
+
+
+export function getEventsAuthors(events: Set<NostrEvent>, exclude? : types.userId[]) : types.userId[]{
+  const authors : types.userId[] = []
+  events.forEach((event)=> {
+    if(!exclude || !exclude.includes(event.pubkey))
+      authors.push(event.pubkey)
+  })
+  return authors
 }
 
 
@@ -140,7 +225,7 @@ async function fetchEvents(
     return new Promise((resolve) => {
         const events: Map<string, NostrEvent> = new Map();
 
-        console.log("GrapeRank : nostr protocol : fetchEvents() : calling fetch()")
+        // console.log("GrapeRank : nostr protocol : fetchEvents() : calling fetch() for ", )
 
         const onEvent = (event: NostrEvent) => {
           // console.log("GrapeRank : nostr : fetchEvents() : recieved kind-"+event.kind, event.id)

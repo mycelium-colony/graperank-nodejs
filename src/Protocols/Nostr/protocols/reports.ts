@@ -26,6 +26,7 @@ export const reports = new NostrProtocol<ReportsParams>(
     impersonation : 0, // someone pretending to be someone else
     other : 0, // for reports that don't fit in the above categories
   },
+  undefined,
   (events : Set<NostrEvent>, params : ReportsParams) : Promise<types.RatingsList> => {
     return applyRatingsByTag(events,reports, 'P', 1, 2)
   }

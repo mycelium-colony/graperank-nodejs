@@ -11,7 +11,7 @@ export interface InterpretationProtocol {
   // private storage for the data set returned by fetchData()
   readonly dataset : Set<any>
   // a callback to fetch data. called by InterpretationAPI
-  fetchData(authors:types.userId[], filter? : object) : Promise<void>
+  fetchData(raters: Set<types.userId>, filter? : object) : Promise<void>
   // a callback for interpreting data. called by InterpretationAPI
   interpret(params? : types.ProtocolParams) : Promise<types.RatingsList>
 }
@@ -28,7 +28,7 @@ class MyDemoInterpreter<ParamsType extends types.ProtocolParams> implements Inte
     readonly interpret : (params : ParamsType) => Promise<types.RatingsList>,
   ){}
 
-  async fetchData(authors:types.userId[]){
+  async fetchData(raters:Set<types.userId>){
     this.dataset = new Set()
     // fetch data from network
     return ;
@@ -51,7 +51,7 @@ const myprotocol = new MyDemoInterpreter<MyProtocolParams> (
 export const mydemo = { myprotocol }
 
 // DEMO use a protocol instance
-const myUserList = []
+const myUserList : Set<types.userId> = new Set()
 const myParams : MyProtocolParams = {}
 const myUserDataSet = await mydemo.myprotocol.fetchData(myUserList)
 const myUserRatings = mydemo.myprotocol.interpret(myParams)
