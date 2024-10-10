@@ -18,12 +18,14 @@ export function calculate ( R : types.Rating[], E : GrapeRank) : types.Scorecard
   console.log("GrapeRank : Calculator : instantiated with ",ratings.length," ratings and ",engine.input.length," input scorecards.")
 
   // setup
+  // STEP A : initialize ratee scorecard
+  // Retrieve or create a ScorecardCalculator for each ratee in ratings
   for(let r in ratings){
-    // STEP A : initialize ratee scorecard
-    // Retrieve or create a ScorecardCalculator for each ratee in ratings
     let ratee = ratings[r].ratee
+    let rater = ratings[r].rater
     if(!calculators.get(ratee)){
-      let calculator = new ScorecardCalculator( ratee )
+      let ratercard = getInputScorecard(rater as string)
+      let calculator = new ScorecardCalculator( ratercard || ratee )
       if(calculator) calculators.set(ratee, calculator)
     }
   }
@@ -38,10 +40,7 @@ export function calculate ( R : types.Rating[], E : GrapeRank) : types.Scorecard
   }
 
   // output
-  calculators.forEach((calculator) => {
-    if(calculator.scorecard?.score) 
-        scorecards.push(calculator.scorecard)
-  })
+  scorecards = output()
 
   console.log("GrapeRank : Calculator : output : ",scorecards.length," scorecards.")
   return scorecards
@@ -79,8 +78,20 @@ function iterate(iteration : number) : number {
 
   console.log("TOTAL number scorecards calculated : ", calculated)
   console.log("------------ END ITERATION : ", iteration, " --------------------")
+  if(!calculated && iteration > 50){
+    throw(new Error("HALTING recursive loop with output "),output())
+  }
   return calculated
 
+}
+
+function output(){
+  let scorecards : types.Scorecard[] = []
+  calculators.forEach((calculator) => {
+    if(typeof calculator.scorecard?.score == 'number') 
+        scorecards.push(calculator.scorecard)
+  })
+  return scorecards
 }
 
 
@@ -99,12 +110,16 @@ class ScorecardCalculator {
   // get summed(){ return this._sumcount < ratings.length ? false : true }
   get calculated(){ return this._calculated }
 
-  constructor(subject : types.elemId){
-    this._scorecard = {
-      subject,
+  // constructor(subject : types.elemId)
+  // constructor(scorecard : types.Scorecard)
+  constructor(input : types.elemId | types.Scorecard){
+    let template = {
       observer : engine.observer,
       context : engine.context,
-    }
+    } 
+    this._scorecard = typeof input == 'string' ? 
+     {...template, subject : input } :
+     {...input, ...template}
   }
 
   // STEP B : calculate sums
@@ -180,7 +195,7 @@ class ScorecardCalculator {
 
   // private _sumcount : number = 0
   private _calculated : boolean = false
-  private _scorecard : types.Scorecard = {}
+  private _scorecard : types.Scorecard
   private _sums : types.CalculatorSums = {...zerosums}
   private get _average(){ 
     return this._sums.products / this._sums.weights
@@ -245,4 +260,25 @@ function groupScorecardsByScore(scorecards : types.Scorecard[], increment : numb
     }
   }
   return group
+}
+
+
+
+
+
+// STEP A : get rater influence from input scorecards
+function getInputScorecard(subject : types.elemId) : types.Scorecard | undefined{
+  let scorecard : types.Scorecard | undefined = undefined
+  for(let s in engine.input){
+    if(subject == engine.input[s].subject) {
+      scorecard =  engine.input[s]
+    }
+  }
+  return scorecard
+}
+
+function getRating(rater:types.userId, ratings:types.RatingsList = []) : types.Rating | undefined{
+  for(let r in ratings){
+    if(rater == ratings[r].rater) return ratings[r]
+  }
 }
