@@ -15,30 +15,27 @@ export class Grapevine extends Map<GrapevineKey,GrapevineValue
 >{
 
   constructor(
-    observer : Pick<ScorecardKeys,"observer">, 
-    context : Pick<ScorecardKeys,"context">,
-    engineparams : types.EngineParams,
     ratings : Rating[], 
     scorecards? : Scorecard[] 
   ){
-    let mapable : [ScorecardKeys,ScorecardValues][] = []
-    let raterScore : number | undefined
+    let iterable :  Array<readonly [GrapevineKey, GrapevineValue]> = []
+    let ratercard : Scorecard | undefined
     let key : GrapevineKey
     let value : GrapevineValue
 
     for(let i in ratings){
-      raterScore = scorecards ? 
-        Grapevine.getScorecard({subject:ratings[i].rater}, scorecards)?.score :
-        GrapevineValue.defaults().score
-      key = new GrapevineKey(ratings[i], raterScorecard, overwrite),
-      value = new GrapevineValue(ratings[i], raterScorecard, overwrite)
+      ratercard = scorecards ? 
+        Grapevine.getScorecard({subject:ratings[i].rater}, scorecards) :
+        GrapevineValue.defaults()
+      key = new GrapevineKey(ratings[i], ratercard),
+      value = new GrapevineValue(ratings[i], ratercard)
 
-      mapable.push([key,value])
+      iterable.push([key,value])
     }
-    super(mapable)
+    super(iterable)
   }
 
-  get(key: GrapevineKey | ScorecardKeys) : GrapevineValue | undefined{
+  get(key: ScorecardKeys) : GrapevineValue | undefined{
     // return matching object if key is instance of GrapevineKey
     if(key instanceof GrapevineKey)
       return super.get(key)
@@ -51,8 +48,20 @@ export class Grapevine extends Map<GrapevineKey,GrapevineValue
   }
 
   set(key: ScorecardKeys, value: ScorecardValues): this {
-    // TODO confirm unique key props
-    return super.set(key, value)
+    // convert value
+    const newvalue = value instanceof GrapevineValue ? value : new GrapevineValue(value)
+    // set existing key if instance of GrapevineKey
+    if(key instanceof GrapevineKey)
+      return super.set(key, newvalue)
+    // otherwise ... locate existing key by ScorecardKeys
+    this.forEach((thisvalue, thiskey, map) => {
+      if(thiskey.matches(key)){ 
+        thisvalue = newvalue
+        return this
+      }
+    })
+    // otherwise set new key && value
+    return super.set(new GrapevineKey(key), newvalue)
   }
 
   /**
@@ -81,24 +90,16 @@ export class Grapevine extends Map<GrapevineKey,GrapevineValue
     }
   }
 
-
   /**
    * Update a Grapevine with new keys 
    * @param keyprops a partial ScorecardKeys of props to replace
-   * @param map The grapevine map to update
-   * @param keys a subset (array) of keys upon which to operate
-   * @returns a new Grapevine instance with new keys in the same order.
    */
-  static remap(keyprops : Partial<ScorecardKeys>, map: Grapevine, keys?:ScorecardKeys[]){
-    let remapped = new Grapevine() 
-    map.forEach((value, key, map) => {
-      if(!keys || keys.includes(key)){
-        let newkey = {...key, ...keyprops}
-        remapped.set(newkey, value)
-      }
+  updateKeys(keyprops : Partial<ScorecardKeys>){
+    this.forEach((thisvalue, thiskey) => {
+      thiskey.update(keyprops)
     })
-    return remapped
   }
+
 
   static getScorecard(key: Partial<ScorecardKeys>, cards:Scorecard[]) : Scorecard | undefined{
     for(let c in cards){
@@ -138,12 +139,17 @@ class GrapevineKey implements ScorecardKeys {
   }
 
   // return true ONLY if ALL props in key match this
-  matches(key: Partial<ScorecardKeys>) : boolean{
-    for(let k in key){
-      if(!!key[k] && key[k] != this[k]) break
+  matches(keyprops: Partial<ScorecardKeys>) : boolean{
+    for(let k in keyprops){
+      if(!!keyprops[k] && keyprops[k] != this[k]) break
       return true
     }
     return false
+  }
+  update(keyprops: Partial<ScorecardKeys>){
+    for(let k in keyprops){
+      if(!!keyprops[k]) this[k] = keyprops[k]
+    }
   }
 }
 
@@ -160,14 +166,10 @@ class GrapevineValue implements ScorecardValues {
   get confidence(){ return this._confidence}
   get score() {return this._score}
 
-  private _observer? : types.userId
   private _calculated? : number;
   private _confidence? : number;
   private _score? : number;
-  private _sums : types.CalculatorSums = {
-    weights : 0,
-    products : 0
-  }
+
 
   constructor(input?:Scorecard | Rating, merge? : Partial<Scorecard>, overwrite = false) {
     let values = overwrite ? 
