@@ -4,9 +4,9 @@ import * as types from "../types"
 import { mergeBigArrays } from "../utils"
 
 
-export async function interpret(raters:types.userId[], requests? : types.ProtocolRequest[] ) : Promise<types.RatingsList>{
+export async function interpret(raters:types.userId[], requests? : types.InterpreterRequest[] ) : Promise<types.RatingsList>{
   let ratings : types.RatingsList = []
-  let request : types.ProtocolRequest
+  let request : types.InterpreterRequest
   let thisiteration = 0, maxiterations = 1
   // holds all raters pased between protocol requests
   const allraters : Set<types.userId> = new Set()
@@ -66,13 +66,13 @@ export async function interpret(raters:types.userId[], requests? : types.Protoco
 
 }
 
-async function protocolFetchData(protocol:types.slug, raters: Set<types.userId>){
+async function protocolFetchData(protocol:types.protocol, raters: Set<types.userId>){
   let [source,datatype] = parseProtocolSlug(protocol)
   let instance = getProtocolInstance(source, datatype)
   return await instance.fetchData(raters)
 }
 
-async function protocolInterpret(protocol:types.slug, params? : types.ProtocolParams ): Promise<types.RatingsList>{
+async function protocolInterpret(protocol:types.protocol, params? : types.ProtocolParams ): Promise<types.RatingsList>{
   let [source,datatype] = parseProtocolSlug(protocol)
   let instance = getProtocolInstance(source, datatype)
 
@@ -83,13 +83,13 @@ async function protocolInterpret(protocol:types.slug, params? : types.ProtocolPa
   return ratings
 }
 
-function parseProtocolSlug(protocol : types.slug) : [types.slug, types.slug]{
+function parseProtocolSlug(protocol : types.protocol) : [string, string]{
   let tuple = protocol.split("-",2)
   if(!tuple[1]) tuple[1] = ""
-  return tuple as [types.slug, types.slug]
+  return tuple as [string, string]
 }
 
-function getProtocolInstance(source:types.slug, datatype:types.slug,) : InterpretationProtocol {
+function getProtocolInstance(source:string, datatype:string,) : InterpretationProtocol {
   let instance = Protocols[source][datatype]
   if(!instance.fetchData || !instance.interpret){
     throw('no protocol instance found for ' + source +"-"+ datatype)

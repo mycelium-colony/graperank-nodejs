@@ -8,6 +8,18 @@
  * https://stackoverflow.com/questions/20936486/node-js-maximum-call-stack-size-exceeded
  */
 
+export async function forEachBigArray<T>(bigarray : T[], callbackfn : (value: T, index: number, array: T[]) => void, thisArg? : any, max = 1000) : Promise<void>{
+  const slices = await sliceBigArray<T>(bigarray, max)
+  for(let s in slices){ 
+    await new Promise<void>( (resolve) => {
+      setTimeout( () => { resolve(
+        slices[s].forEach(callbackfn,thisArg)
+      )}, 0 )
+    })
+  }
+  return 
+}
+
 export async function mergeBigArrays<T>(array1 : T[], array2 : T[], max = 1000) : Promise<T[]>{
   const merged : T[] = [...array1]
   const slices = await sliceBigArray<T>(array2, max)
@@ -38,4 +50,22 @@ export async function sliceBigArray<T>(array : T[], max = 1000) : Promise<T[][]>
     sliceend = slicestart+max
   }
   return sliced
+}
+
+
+
+
+export function mapNested<Index1, Index2, Value>(array : [Index1,[Index2,Value][]][]) :  Map<Index1,Map<Index2,Value>> {
+  let map : Map<Index1,Map<Index2,Value>> = new Map()
+  for(let i in array){
+    map.set(array[i][0], new Map(array[i][1]))
+  }
+  return map
+}
+export function unmapNested<Index1, Index2, Value>(map : Map<Index1,Map<Index2,Value>> ) : [Index1,[Index2,Value][]][] {
+  let array : [Index1,[Index2,Value][]][] = []
+  map.forEach((value,key)=>{
+    array.push([key, [...value.entries()]])
+  })
+  return array
 }

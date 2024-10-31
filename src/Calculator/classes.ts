@@ -2,7 +2,7 @@ import * as types from "../types"
 
 // shorthand for types
 type ScorecardKeys = types.ScorecardKeys
-type ScorecardValues = types.ScorecardValues
+type ScorecardData = types.ScorecardData
 type Scorecard = types.Scorecard
 type Rating = types.Rating
 
@@ -26,7 +26,7 @@ export class Grapevine extends Map<GrapevineKey,GrapevineValue
     for(let i in ratings){
       ratercard = scorecards ? 
         Grapevine.getScorecard({subject:ratings[i].rater}, scorecards) :
-        GrapevineValue.defaults()
+        Grapevine.newScorecard({subject:ratings[i].rater})
       key = new GrapevineKey(ratings[i], ratercard),
       value = new GrapevineValue(ratings[i], ratercard)
 
@@ -47,7 +47,7 @@ export class Grapevine extends Map<GrapevineKey,GrapevineValue
     return value
   }
 
-  set(key: ScorecardKeys, value: ScorecardValues): this {
+  set(key: ScorecardKeys, value: ScorecardData): this {
     // convert value
     const newvalue = value instanceof GrapevineValue ? value : new GrapevineValue(value)
     // set existing key if instance of GrapevineKey
@@ -81,7 +81,7 @@ export class Grapevine extends Map<GrapevineKey,GrapevineValue
    * Import an array of Scorecards or Ratings to this Grapevine 
    * @param cards 
    */
-  import(cards : Scorecard[] | Rating[], keyprops? : Partial<ScorecardKeys>, valueprops? : Partial<ScorecardValues>, overwrite = false){
+  import(cards : Scorecard[] | Rating[], keyprops? : Partial<ScorecardKeys>, valueprops? : Partial<ScorecardData>, overwrite = false){
     for(let i in cards){
       this.set( 
         new GrapevineKey(cards[i], keyprops, overwrite), 
@@ -110,14 +110,35 @@ export class Grapevine extends Map<GrapevineKey,GrapevineValue
     }
   }
 
+  static newScorecard(from? : Partial<Scorecard>) : Scorecard{
+    return {
+      ...GrapevineKey.defaults(from),
+      ...GrapevineValue.defaults(from)
+    }
+  }
+
 }
 
 class GrapevineKey implements ScorecardKeys {
   subject: types.userId
   observer: types.userId
   context: string
+  // TODO implement these properties
+  scoreindex? : types.scoreindex
+  timestamp : number
 
-  constructor(card:Scorecard | Rating, merge? : Partial<Scorecard>, overwrite = false) {
+  static defaults(from? : Partial<ScorecardKeys>) : Required<ScorecardKeys> {
+    //TODO set default score and confidence from preset or user prefs
+    return {
+      observer : '',
+      context : '',
+      subject : '',
+      timestamp : 0,
+      ...from
+    }
+  }
+
+  constructor(card:ScorecardKeys | Rating, merge? : Partial<Scorecard>, overwrite = false) {
     this.subject = 
       overwrite && merge?.subject ? merge.subject : 
       'subject' in card  &&  card.subject ? card.subject  : 
@@ -154,30 +175,31 @@ class GrapevineKey implements ScorecardKeys {
 }
 
 
-class GrapevineValue implements ScorecardValues {
+class GrapevineValue implements ScorecardData {
   
-  static defaults() : ScorecardValues {
-    //TODO set default score and confidence
-    // from preset or user prefs
-    return {}
+  static defaults(from? : Partial<ScorecardData>) : Required<ScorecardData> {
+    //TODO set default score and confidence from preset or user prefs
+    return {
+      confidence : 0,
+      score : 0,
+      input : {},
+      ...from 
+    }
   }
 
-  get calculated() {return this._calculated}
   get confidence(){ return this._confidence}
   get score() {return this._score}
 
-  private _calculated? : number;
   private _confidence? : number;
   private _score? : number;
 
 
-  constructor(input?:Scorecard | Rating, merge? : Partial<Scorecard>, overwrite = false) {
+  constructor(input?:ScorecardData | Rating, merge? : Partial<Scorecard>, overwrite = false) {
     let values = overwrite ? 
       {...GrapevineValue.defaults, ...input, ...merge} : 
       {...GrapevineValue.defaults, ...merge, ...input}
       this._score = values.score 
       this._confidence = values.confidence
-      this._calculated = values.calculated
   }
 
 
