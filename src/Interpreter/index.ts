@@ -1,5 +1,5 @@
-import * as Protocols from "../Protocols"
-import { InterpretationProtocol } from "../Protocols/classes"
+import * as Protocols from "./protocols"
+import { InterpretationProtocol } from "./classes"
 import * as types from "../types"
 import { mergeBigArrays } from "../utils"
 
@@ -7,40 +7,50 @@ import { mergeBigArrays } from "../utils"
 export async function interpret(raters:types.userId[], requests? : types.InterpreterRequest[] ) : Promise<types.RatingsList>{
   let ratings : types.RatingsList = []
   let request : types.InterpreterRequest
-  let thisiteration = 0, maxiterations = 1
+  let thisiteration : number, maxiterations : number
+  let thisiterationratings : types.RatingsList
+  let thisiterationraters : Set<types.userId>
   // holds all raters pased between protocol requests
   const allraters : Set<types.userId> = new Set()
   // holds new raters added between protocol iterations
   let newraters : Set<types.userId> | undefined
+  let requestauthors : Set<types.userId> | undefined
 
   if(!!raters && !!requests){
     console.log("GrapeRank : interpret : requesting ",requests.length, " protocols for ",raters.length," raters")
 
     // add input raters to allraters
-    for(let r in raters){  allraters.add(raters[r]) }
+    raters.forEach((userid) => allraters.add(userid))
 
     // loop through each interpreter request
+    // requests having `iterations` will ADD to `allraters` with each interation
+    // each request will use the `allraters` list from previous requests
     for(let r in requests){
       request = requests[r]
-      maxiterations = request.params?.iterate || maxiterations
+      thisiteration = 0
+      maxiterations = request.params?.iterate || 1
+      if(request.authors && request.authors.length) requestauthors = new Set(request.authors)
 
-      console.log("GrapeRank : interpret : calling " +request.protocol+" protocol with ", maxiterations," iterations")
+      // console.log("GrapeRank : interpret : calling " +request.protocol+" protocol with ", maxiterations," iterations")
 
       while(thisiteration < maxiterations){
+        // unset new raters before each new iteration
+        newraters = new Set() 
         // increment for each protocol iteration
         thisiteration ++
-        console.log("GrapeRank : interpret : protocol : itaration ", thisiteration, " of ", maxiterations, " with ", newraters?.size || allraters.size," new raters")
+        thisiterationratings = []
+        thisiterationraters = requestauthors || newraters.size ?  newraters : allraters
+        console.log("GrapeRank : interpret : "+request.protocol+" protocol : iteration begin ", thisiteration, " of ", maxiterations)
+        console.log("GrapeRank : interpret : "+request.protocol+" protocol : fetching ratings from ", thisiterationraters.size," raters")
 
         try{
-          // TODO incorporate PER protocol raters list
-          // fetch protocol specific dataset for newraters OR allraters
-          await protocolFetchData(request.protocol, newraters || allraters)
+          // fetch protocol specific dataset for requestauthors OR newraters OR allraters
+          await protocolFetchData(request.protocol, thisiterationraters)
           // interpret dataset and add to ratings
+          let thisiterationratings = await protocolInterpret(request.protocol, request.params)
           // handle big arrays with care
-          ratings = await mergeBigArrays( ratings,
-            await protocolInterpret(request.protocol, request.params)
-          )
-          console.log("GrapeRank : interpret : protocol : added " ,ratings.length, " ratings")
+          ratings = await mergeBigArrays( ratings,thisiterationratings)
+          console.log("GrapeRank : interpret : "+request.protocol+" protocol : retrieved " ,ratings.length, " records")
         }catch(e){
           console.log('GrapeRank : interpret : ERROR : ',e)
         }
@@ -48,12 +58,10 @@ export async function interpret(raters:types.userId[], requests? : types.Interpr
         // get new raters from ratings for next iteration
         if(thisiteration < maxiterations) {
           newraters = getNewRaters(ratings, allraters)
-          console.log("GrapeRank : interpret : protocol : added " ,newraters.size, " new raters from ratings for next iteration")
           // merge all raters to include new raters
           newraters.forEach((rater) => allraters.add(rater))
         }
-        // unset new raters if protocol iterations are complete
-        else {  newraters = new Set()  }
+        console.log("GrapeRank : interpret : "+request.protocol+" protocol : iteration end : added ",thisiterationratings?.length, " ratings and " ,newraters.size, " new raters ")
         
       }
 

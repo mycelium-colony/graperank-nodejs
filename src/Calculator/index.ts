@@ -73,9 +73,10 @@ export function calculate ( R : Rating[], K : Required<WorldviewKeys>, W : World
 }
 
 
+let totalcalculated = 0
 // returns number of scorecards calculated
 function iterate(iteration : number) : number {
-  let calculated = 0
+  let thistotalcalculated = 0
   console.log("------------ BEGIN ITERATION : ", iteration, " --------------------")
   
   // STEP B : calculate sums
@@ -91,23 +92,31 @@ function iterate(iteration : number) : number {
 
   // STEP C : calculate influence
   // calculate final influence and conficdence for each ratee scorecard
+  // call calculate again if calculation is NOT complete
   calculators.forEach( calculator => { 
     if( !calculator.calculated ){
       calculator.calculate()
     }else{
-      calculated ++
+      thistotalcalculated ++
     }
-  })
-    
+  }) 
+
   // LOG iteration
   logScoresForIteration()
+  console.log("TOTAL number scorecards : ", calculators.size )  
+  console.log("TOTAL scorecards calculated : ", thistotalcalculated)
 
-  console.log("TOTAL number scorecards calculated : ", calculated)
-  console.log("------------ END ITERATION : ", iteration, " --------------------")
-  if(!calculated && iteration > 50){
-    throw(new Error("HALTING recursive loop in calculate "))
+  if(iteration > 10 && thistotalcalculated == totalcalculated){
+    console.log("HALTING iterator : no new scores calculated")
+    thistotalcalculated = calculators.size
   }
-  return calculated
+  if(iteration > 100){
+    console.log("HALTING iterator : exeded MAX 100 iterations in calculate ")
+    thistotalcalculated = calculators.size
+  }
+
+  console.log("------------ END ITERATION : ", iteration, " --------------------")
+  return thistotalcalculated
 
 }
 
@@ -294,7 +303,6 @@ function logScoresForIteration(){
       v = ((i as unknown as number) * increment).toPrecision(2)
       console.log("number of cards having scores from "+ ov +" to " +v+ " = ", scores[i])
     }
-    console.log("TOTAL number scorecards = ",scorecards.length)  
 }
 
 

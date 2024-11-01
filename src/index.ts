@@ -241,10 +241,18 @@ export const DEFAULT_CONTEXT= "grapevine-web-of-trust"
 const worldviewpresets : Record<string,WorldviewSettings> = {
 
   [DEMO_CONTEXT] : {
-    interpreters : [{
-      protocol : "nostr-follows",
-      params : {iterate : 3 }
-    }],
+    interpreters : [
+      {
+        protocol : "nostr-follows",
+        params : {iterate : 3 }
+      },
+      {
+        protocol : "nostr-mutes",
+      },
+      {
+        protocol : "nostr-reports",
+      }
+    ],
     calculator : undefined,
     input : undefined
   },
