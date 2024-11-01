@@ -133,7 +133,7 @@ function outputScorecardsData() : ScorecardsDataStorage {
     }
   })
   return scorecards.sort((a ,b )=>{
-    return  b[1].score - a[1].score ||  b[1].confidence - a[1].confidence 
+    return  b[1].score - a[1].score ||  b[1].input['nostr-follows']?.count - a[1].input['nostr-follows']?.count 
   })
 }
 
