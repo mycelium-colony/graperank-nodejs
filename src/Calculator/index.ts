@@ -13,9 +13,9 @@ const DefaultParams : Required<CalculatorParams> = {
   attenuation : .5,
   // factor for calculating confidence 
   // MUST be bellow 1 or confidence will ALWAYS be 0
-  rigor : .25,
-  // minimum weight for scorecard to be calculated
-  minweight : 0,
+  rigor : .6,
+  // minimum score ABOVE WHICH scorecard will be included in output
+  minscore : 0,
   // max difference between calculator iterations
   // ZERO == most precise
   precision : 0,
@@ -158,7 +158,7 @@ const zerosums : CalculatorSums = {
 class ScorecardCalculator {
 
   get output() : [elemId, Required<ScorecardData>] | undefined {
-    if(!this.calculated) return undefined
+    if(!this.calculated || this._data.score <= calculator.minscore) return undefined
     return [ this._subject, this._data ]
   }
   get scorecard() : Required<Scorecard> | undefined { 
@@ -239,7 +239,7 @@ class ScorecardCalculator {
     let confidence = 0
     let score = 0
     // If weights == 0 then confidence and score will also be 0
-    if(this._sums.weights > (calculator.minweight || 0)){
+    if(this._sums.weights > 0){
       // STEP D : calculate confidence
       confidence = this.confidence
       score = this._average * confidence

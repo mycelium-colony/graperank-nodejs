@@ -230,7 +230,7 @@ export type CalculatorParams = {
   // factor for calculating confidence
   rigor : number // 0 -1
   // minimum weight for scorecard to be calculated
-  minweight : number // 0 - 1 
+  minscore : number // 0 - 1 
   // max difference between calculator iterations
   // ZERO == most precise
   precision : number

@@ -1,32 +1,42 @@
 import {InterpretationProtocol} from "../classes.ts"
-import * as types from "../../types.ts"
 import { Event as NostrEvent} from 'nostr-tools/core'
 import { Filter as NostrFilter} from 'nostr-tools/filter'
 import { SimplePool } from 'nostr-tools/pool'
 import { useWebSocketImplementation } from 'nostr-tools/pool'
+import {mergeBigArrays, sliceBigArray} from "../../utils.ts"
+import { ProtocolParams, Rating, RatingsList, userId } from "../../types.ts"
 import WebSocket from 'ws'
 useWebSocketImplementation(WebSocket)
-import {mergeBigArrays, sliceBigArray} from "../../utils.ts"
 
 const relays = [
   "wss://purplepag.es",
   "wss://profiles.nostr1.com",
   "wss://relay.primal.net",
-  // "wss://relay.damus.io"
+  "wss://relay.damus.io",
+  "wss://nostr-pub.wellorder.net",
+  "wss://relay.nostr.bg",
+  "wss://nos.lol	239	true",
+  "wss://nostr.bitcoiner.social",
+  "wss://nostr.fmt.wiz.biz",
+  "wss://nostr.oxtr.dev",
+  "wss://nostr.mom",
+  "wss://relay.nostr.band",
+  "wss://relay.snort.social",
+  "wss://soloco.nl",
 ]
 
 const maxauthors = 1000
 
-export class NostrProtocol<ParamsType extends types.ProtocolParams> implements InterpretationProtocol {
+export class NostrProtocol<ParamsType extends ProtocolParams> implements InterpretationProtocol {
   params : ParamsType
   dataset : Set<NostrEvent> = new Set()
-  interpret : (params : ParamsType) => Promise<types.RatingsList>
+  interpret : (params : ParamsType) => Promise<RatingsList>
 
   constructor( 
     readonly kinds : number[],
     readonly defaults : ParamsType,
-    readonly validate? : (events : Set<NostrEvent>, authors : types.userId[], previous? : Set<NostrEvent>) => boolean | types.userId[],
-    interpret? : (events:Set<NostrEvent>, params : ParamsType) => Promise<types.RatingsList>
+    readonly validate? : (events : Set<NostrEvent>, authors : userId[], previous? : Set<NostrEvent>) => boolean | userId[],
+    interpret? : (events:Set<NostrEvent>, params : ParamsType) => Promise<RatingsList>
   ){
     this.interpret = async (params:ParamsType) => {
       console.log("GrapeRank : nostr protocol : interptreting " +this.dataset.size+ " events")
@@ -42,9 +52,9 @@ export class NostrProtocol<ParamsType extends types.ProtocolParams> implements I
   // breaks up a large raters list into multiple authors lists 
   // suitable for relay requests, and sends them all in parrallel
   // returns a single promise that is resolved when all fetches are complete.
-  async fetchData(raters : Set<types.userId>, filter?: NostrFilter) : Promise<void> {
+  async fetchData(raters : Set<userId>, filter?: NostrFilter) : Promise<void> {
 
-    const authors : types.userId[][] = raters.size > maxauthors ? 
+    const authors : userId[][] = raters.size > maxauthors ? 
       await sliceBigArray([...raters], maxauthors) : [[...raters]]
 
     const promises : Promise<Set<NostrEvent>>[] = []
@@ -114,14 +124,14 @@ export class NostrProtocol<ParamsType extends types.ProtocolParams> implements I
 }
 
 
-export async function  applyRatingsByTag(events : Set<NostrEvent>, protocol : NostrProtocol<any>, tag = "p", rateeindex = 1, scoreindex? : number) : Promise<types.RatingsList> {
+export async function  applyRatingsByTag(events : Set<NostrEvent>, protocol : NostrProtocol<any>, tag = "p", rateeindex = 1, scoreindex? : number) : Promise<RatingsList> {
   console.log("GrapeRank : nostr protocol : applyRatingsByTag()")
-  let ratings : types.RatingsList = [],
+  let ratings : RatingsList = [],
     numevents : number = events.size, 
     eventindex : number = 0, 
     numratings : number , 
     numskipped : number,
-    ratingpartial : Partial<types.Rating> = {
+    ratingpartial : Partial<Rating> = {
       // apply a single score for all ratings, as indicated in params.score
       score : protocol.params?.score as number || 0,
       confidence : protocol.params?.confidence as number || .5,
@@ -130,7 +140,7 @@ export async function  applyRatingsByTag(events : Set<NostrEvent>, protocol : No
   for(const event of events) {
     eventindex ++
     // console.log("GrapeRank : applyRatingsByTag : proccessing event "+eventindex+"/"+numevents+" with " + event.tags.length + " tags")
-    let eventratings : types.RatingsList = []
+    let eventratings : RatingsList = []
     // loop through all tags of each event to find the ones to make ratings from
     if(!!event.tags && event.tags.length < 10000){
       numratings = 0
@@ -149,7 +159,7 @@ export async function  applyRatingsByTag(events : Set<NostrEvent>, protocol : No
           // `rateeindex` argument determines the tag index from which to get 
           // the ID of what's been rated
           rating.ratee = event.tags[t][rateeindex]
-          eventratings.push(rating as types.Rating)
+          eventratings.push(rating as Rating)
           numratings ++
         }else{
           numskipped ++
@@ -167,14 +177,14 @@ export async function  applyRatingsByTag(events : Set<NostrEvent>, protocol : No
 }
 
 
-export function validateEachEventHasAuthor( events : Set<NostrEvent>, authors : types.userId[], previous? : Set<NostrEvent> ) : boolean | types.userId[] { 
+export function validateEachEventHasAuthor( events : Set<NostrEvent>, authors : userId[], previous? : Set<NostrEvent> ) : boolean | userId[] { 
   if(authors.length == events.size) return true
   if(!validateOneEventIsNew(events,authors,previous)) return false
   let authorswithoutevents = getEventsAuthors(events, authors) 
   return authorswithoutevents.length ? authorswithoutevents : true
 }
 
-export function validateOneEventIsNew( events : Set<NostrEvent>, authors : types.userId[], previous? : Set<NostrEvent> ) : boolean | types.userId[] { 
+export function validateOneEventIsNew( events : Set<NostrEvent>, authors : userId[], previous? : Set<NostrEvent> ) : boolean | userId[] { 
   if(!previous || !previous.size) return true
   previous.forEach((pevent)=>{
     events.forEach((newevent)=>{
@@ -185,8 +195,8 @@ export function validateOneEventIsNew( events : Set<NostrEvent>, authors : types
 }
 
 
-export function getEventsAuthors(events: Set<NostrEvent>, exclude? : types.userId[]) : types.userId[]{
-  const authors : types.userId[] = []
+export function getEventsAuthors(events: Set<NostrEvent>, exclude? : userId[]) : userId[]{
+  const authors : userId[] = []
   events.forEach((event)=> {
     if(!exclude || !exclude.includes(event.pubkey))
       authors.push(event.pubkey)
