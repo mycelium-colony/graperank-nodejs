@@ -1,20 +1,20 @@
 import * as Protocols from "./protocols"
 import { InterpretationProtocol } from "./classes"
-import * as types from "../types"
 import { mergeBigArrays } from "../utils"
+import { InterpreterRequest, ProtocolParams, RatingsList, userId , protocol, Rating} from "../types"
 
 
-export async function interpret(raters:types.userId[], requests? : types.InterpreterRequest[] ) : Promise<types.RatingsList>{
-  let ratings : types.RatingsList = []
-  let request : types.InterpreterRequest
+export async function interpret(raters:userId[], requests? : InterpreterRequest[] ) : Promise<RatingsList>{
+  let ratings : RatingsList = []
+  let request : InterpreterRequest
   let thisiteration : number, maxiterations : number
-  let newratings : types.RatingsList
-  let thisiterationraters : Set<types.userId>
+  let newratings : RatingsList
+  let thisiterationraters : Set<userId>
   // holds all raters pased between protocol requests
-  const allraters : Set<types.userId> = new Set()
+  const allraters : Set<userId> = new Set()
   // holds new raters added between protocol iterations
-  let newraters : Set<types.userId> = new Set()
-  let requestauthors : Set<types.userId> | undefined
+  let newraters : Set<userId> = new Set()
+  let requestauthors : Set<userId> | undefined
 
   if(!!raters && !!requests){
     console.log("GrapeRank : interpret : requesting ",requests.length, " protocols for ",raters.length," raters")
@@ -76,13 +76,13 @@ export async function interpret(raters:types.userId[], requests? : types.Interpr
 
 }
 
-async function protocolFetchData(protocol:types.protocol, raters: Set<types.userId>){
+async function protocolFetchData(protocol:protocol, raters: Set<userId>){
   let [source,datatype] = parseProtocolSlug(protocol)
   let instance = getProtocolInstance(source, datatype)
   return await instance.fetchData(raters)
 }
 
-async function protocolInterpret(protocol:types.protocol, params? : types.ProtocolParams ): Promise<types.RatingsList>{
+async function protocolInterpret(protocol:protocol, params? : ProtocolParams ): Promise<RatingsList>{
   let [source,datatype] = parseProtocolSlug(protocol)
   let instance = getProtocolInstance(source, datatype)
 
@@ -93,7 +93,7 @@ async function protocolInterpret(protocol:types.protocol, params? : types.Protoc
   return ratings
 }
 
-function parseProtocolSlug(protocol : types.protocol) : [string, string]{
+function parseProtocolSlug(protocol : protocol) : [string, string]{
   let tuple = protocol.split("-",2)
   if(!tuple[1]) tuple[1] = ""
   return tuple as [string, string]
@@ -107,8 +107,8 @@ function getProtocolInstance(source:string, datatype:string,) : InterpretationPr
   return instance
 }
 
-function getNewRaters(ratings : types.Rating[], raters? : Set<types.userId>) : Set<types.userId>{
-  let newraters : Set<types.userId> = new Set()
+function getNewRaters(ratings : Rating[], raters? : Set<userId>) : Set<userId>{
+  let newraters : Set<userId> = new Set()
   for(let r in ratings){
     if(!raters || !raters.has(ratings[r].ratee)) 
       newraters.add(ratings[r].ratee)
