@@ -1,10 +1,10 @@
-import type { CalculatorParams, CalculatorSums, elemId, GrapevineDataStorage, Rating, RatingsList, Scorecard, ScorecardData, ScorecardsDataStorage, scoreindex, timestamp, userId, WorldviewCalcululation, WorldviewKeys, WorldviewSettings } from "../types"
+import type { CalculatorParams, CalculatorSums, elemId, GrapevineDataStorage, InterpreterResults, Rating, RatingsList, Scorecard, ScorecardData, ScorecardInput, ScorecardsDataStorage, scoreindex, timestamp, userId, WorldviewCalculation, WorldviewKeys, WorldviewSettings } from "../types"
 
 let keys : Required<WorldviewKeys>
 let calculator : Required<CalculatorParams>
 let settings : WorldviewSettings
 let calctimestamp : timestamp
-let ratings : Rating[] 
+let ratings : RatingsList 
 // const ratercards : Map<userId,Scorecard> = new Map()
 const calculators : Map<elemId,ScorecardCalculator> = new Map()
 
@@ -13,9 +13,9 @@ const DefaultParams : Required<CalculatorParams> = {
   attenuation : .5,
   // factor for calculating confidence 
   // MUST be bellow 1 or confidence will ALWAYS be 0
-  rigor : .6,
+  rigor : .7,
   // minimum score ABOVE WHICH scorecard will be included in output
-  minscore : 0,
+  minscore : -1,
   // max difference between calculator iterations
   // ZERO == most precise
   precision : 0,
@@ -26,7 +26,7 @@ const DefaultParams : Required<CalculatorParams> = {
 /**
  * Calculate new scorecards from interpreted ratings and input scorecards
  */
-export function calculate ( R : Rating[], K : Required<WorldviewKeys>, W : WorldviewSettings) : WorldviewCalcululation {
+export function calculate ( R : RatingsList, K : Required<WorldviewKeys>, W : WorldviewSettings) : WorldviewCalculation {
 
   keys = K
   settings = W
@@ -44,13 +44,16 @@ export function calculate ( R : Rating[], K : Required<WorldviewKeys>, W : World
   for(let r in ratings){
     let ratee = ratings[r].ratee
     let rater = ratings[r].rater
-    if(!calculators.get(ratee)){
-      let ratercard = getInputScorecard(rater as string)
-      let calculator = new ScorecardCalculator( ratercard || ratee )
+    if(ratee && !calculators.get(ratee)){
+      // TODO get scores for each rater from worldview input cards
+      // let ratercard = getInputScorecard(rater as string)
+      let calculator = new ScorecardCalculator( ratee )
       if(calculator) calculators.set(ratee, calculator)
     }
   }
   console.log("GrapeRank : Calculator : setup with ",calculators.size," calculators.")
+  // if(!calculators.has(keys.observer as string))
+  //   throw('GrapeRank : Calculator : missing oberver calculator')
 
   // iterate
   calctimestamp = Date.now().valueOf()
@@ -62,13 +65,13 @@ export function calculate ( R : Rating[], K : Required<WorldviewKeys>, W : World
   }
 
   // output
-  const calculationdata : WorldviewCalcululation = {
+  const calculationdata : WorldviewCalculation = {
     timestamp : calctimestamp,
     grapevine : outputGrapevineData(),
     scorecards : outputScorecardsData()
   }
 
-  console.log("GrapeRank : Calculator : output WorldviewCalcululation : ",{...keys, calctimestamp})
+  console.log("GrapeRank : Calculator : output WorldviewCalculation : ",{...keys, calctimestamp})
   return calculationdata
 }
 
@@ -85,13 +88,12 @@ function iterate(iteration : number) : number {
     let calculator = calculators.get(ratings[r].ratee)
     let ratercard = calculators.get(ratings[r].rater as string)?.scorecard
     if(calculator) {
-
       calculator.sum( ratings[r], ratercard)
     }
   }
 
   // STEP C : calculate influence
-  // calculate final influence and conficdence for each ratee scorecard
+  // calculate final influence and confidence for each ratee scorecard
   // call calculate again if calculation is NOT complete
   calculators.forEach( calculator => { 
     if( !calculator.calculated ){
@@ -185,7 +187,7 @@ class ScorecardCalculator {
 
   // STEP B : calculate sums
   // calculate sum of weights & sum of products
-  sum( rating : Rating, ratercard? : Scorecard){
+  sum( rating : Required<Rating>, ratercard? : Scorecard){
     
     // do nothing if ratercard.subject does not match rating.rater
     if(ratercard && ratercard.subject != rating.rater){
@@ -200,21 +202,27 @@ class ScorecardCalculator {
 
     // let oldsums = {...this._sums}
     // determine rater influence
-    let influence = ratercard?.subject == keys.observer ? 1 : ratercard?.score ? ratercard.score as number : 0
+    let influence = rating.rater == keys.observer ? 1 : ratercard?.score ? ratercard.score as number : 0
     let weight = influence * rating.confidence; 
     // no attenuation for observer
     if (rating.rater != keys.observer) 
       weight = weight * (calculator.attenuation);
-    // add to sums
-    this._sums.weights += weight
-    this._sums.products += weight * rating.score
+
+    // count = number of ratings used to calculate this scorecard, grouped by protocol name
+    let count = this._input?.count ? this._input.count : {}
+    count[rating.protocol] = (this._input?.count[rating.protocol] || 0) + 1 
+    // dos = the minimum nonzero iteration number for ratings used to calculate this scorecard 
+    let dos = rating.iteration && this._input?.dos && rating.iteration < this._input.dos ? rating.iteration : this._input?.dos || rating.iteration
+    // weights = sum of weights for ALL ratings used to calculate this scorecard
+    let weights = this._sums.weights += weight
+
     // TODO refactor `this._sums` to hold values for scorecard.input
-    if(!this._data.input ) this._data.input = {}
-    this._data.input[rating.protocol] = {
-      count : (this._data.input[rating.protocol]?.count || 0) + 1,
-      weights :  (this._data.input[rating.protocol]?.weights || 0) + weight,
-      weighted : (this._data.input[rating.protocol]?.weighted || 0) + (weight * rating.score)
-    }
+    this._input = { count, weights, dos }
+
+    // add to sums
+    this._sums.weights = weights
+    this._sums.products += weight * rating.score
+
     // increment sumcount to reflect how many times sum() has been run
     // this._sumcount ++
 
@@ -254,16 +262,17 @@ class ScorecardCalculator {
     this._sums  = {...zerosums};
     // output the scorecard
     this._data = {
-      ...this._data,
-      confidence, score,
-      // TODO apply this._input to scorecard.input (after refactoring _sums)
+      confidence, 
+      score,
+      input : this._input,
     }
     return this.calculated
   }
 
   private _calculated : boolean | undefined
   private _subject : elemId 
-  private _data : Required<ScorecardData> = {score : 0, confidence : 0, input : {}}
+  private _data : Required<ScorecardData> 
+  private _input : ScorecardInput
   // TODO refactor this._sums as this._input in the format of scorecard.input
   private _sums : CalculatorSums = {...zerosums}
   private get _average(){ 
@@ -335,6 +344,7 @@ function groupScorecardsByScore(scorecards : Scorecard[], increment : number ) :
 
 
 // STEP A : get rater influence from input scorecards
+// FIXME this will NOT WORK since input is NO LONGER a list of scorecards
 function getInputScorecard(subject : elemId) : Scorecard | undefined{
   let scorecard : Scorecard | undefined = undefined
   for(let s in settings.input){

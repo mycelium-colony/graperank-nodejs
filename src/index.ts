@@ -1,7 +1,7 @@
 import * as Calculator from "./Calculator";
 import * as Interpreter from "./Interpreter";
 import { StorageApi, StorageFileList, StorageProcessor } from "./Storage";
-import { ApiDataTypes, ApiOperation, ApiRequest, ApiTypeName, ApiTypeOperation, CalculatorParams, EngineRequest, GrapevineDataStorage, GrapevineKeys, InterpreterRequest, RatingsList, Scorecard, ScorecardKeys, ScorecardsDataStorage, timestamp, userId, WorldviewCalcululation, WorldviewDataStorage, WorldviewKeys, WorldviewSettings } from "./types";
+import { ApiDataTypes, ApiOperation, ApiRequest, ApiTypeName, ApiTypeOperation, CalculatorParams, EngineRequest, GrapevineDataStorage, GrapevineKeys, ProtocolRequest, Rating, RatingsList, Scorecard, ScorecardKeys, ScorecardsDataStorage, timestamp, userId, WorldviewCalculation, WorldviewDataStorage, WorldviewKeys, WorldviewSettings } from "./types";
 
 
 // const storage = new StorageApi( new StorageProcessor.s3 )
@@ -34,7 +34,7 @@ export class GrapeRank implements ApiOperation {
   // observer: userId;
   // context: string;
   // input?: GrapevineKeys
-  // interpreters: InterpreterRequest[];
+  // interpreters: ProtocolRequest[];
   // params: CalculatorParams;
   // dev : DevParams;
   // FIXME implement these properties
@@ -149,7 +149,7 @@ export class GrapeRank implements ApiOperation {
   }
 
   // calculate and store a new grapevine
-  private async generate(keys? : Required<WorldviewKeys>, data? : WorldviewDataStorage, iteration? : number) : Promise<WorldviewCalcululation | undefined>{
+  private async generate(keys? : Required<WorldviewKeys>, data? : WorldviewDataStorage, iteration? : number) : Promise<WorldviewCalculation | undefined>{
     // validate keys
     if(!keys && this.request.keys.observer && this.request.keys.context) {
       keys = this.request.keys as Required<WorldviewKeys>
@@ -187,7 +187,8 @@ export class GrapeRank implements ApiOperation {
     // Calculate
     const raters = this.getRaters(ratercards) || [keys.observer]
     console.log("GrapeRank : calling interpret with " ,raters.length, " authors ...")
-    const ratings : RatingsList = await Interpreter.interpret(raters, data.interpreters)
+    const interpeterresults = await Interpreter.interpret(raters, data.interpreters)
+    const ratings : RatingsList = interpeterresults.ratings
   
     // TODO what to do if new authors are "discovered" by interpreter?
     console.log("GrapeRank : calling calculate with "+ratings.length+" ratings... ")
@@ -246,12 +247,12 @@ const worldviewpresets : Record<string,WorldviewSettings> = {
         protocol : "nostr-follows",
         params : {iterate : 6 }
       },
-      {
-        protocol : "nostr-mutes",
-      },
-      {
-        protocol : "nostr-reports",
-      }
+      // {
+      //   protocol : "nostr-mutes",
+      // },
+      // {
+      //   protocol : "nostr-reports",
+      // }
     ],
     calculator : undefined,
     input : undefined
@@ -261,7 +262,7 @@ const worldviewpresets : Record<string,WorldviewSettings> = {
     interpreters : [
       {
         protocol : "nostr-follows",
-        params : {iterate : 3 }
+        params : {iterate : 6 }
       },
       {
         protocol : "nostr-mutes",

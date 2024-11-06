@@ -4,7 +4,7 @@ import { Filter as NostrFilter} from 'nostr-tools/filter'
 import { SimplePool } from 'nostr-tools/pool'
 import { useWebSocketImplementation } from 'nostr-tools/pool'
 import {mergeBigArrays, sliceBigArray} from "../../utils.ts"
-import { ProtocolParams, Rating, RatingsList, userId } from "../../types.ts"
+import { PartialRatingsList, ProtocolParams, Rating, userId } from "../../types.ts"
 import WebSocket from 'ws'
 useWebSocketImplementation(WebSocket)
 
@@ -30,13 +30,13 @@ const maxauthors = 1000
 export class NostrProtocol<ParamsType extends ProtocolParams> implements InterpretationProtocol {
   params : ParamsType
   dataset : Set<NostrEvent> = new Set()
-  interpret : (params : ParamsType) => Promise<RatingsList>
+  interpret : (params : ParamsType) => Promise<PartialRatingsList>
 
   constructor( 
     readonly kinds : number[],
     readonly defaults : ParamsType,
     readonly validate? : (events : Set<NostrEvent>, authors : userId[], previous? : Set<NostrEvent>) => boolean | userId[],
-    interpret? : (events:Set<NostrEvent>, params : ParamsType) => Promise<RatingsList>
+    interpret? : (events:Set<NostrEvent>, params : ParamsType) => Promise<PartialRatingsList>
   ){
     this.interpret = async (params:ParamsType) => {
       console.log("GrapeRank : nostr protocol : interptreting " +this.dataset.size+ " events")
@@ -124,42 +124,41 @@ export class NostrProtocol<ParamsType extends ProtocolParams> implements Interpr
 }
 
 
-export async function  applyRatingsByTag(events : Set<NostrEvent>, protocol : NostrProtocol<any>, tag = "p", rateeindex = 1, scoreindex? : number) : Promise<RatingsList> {
+export async function  applyRatingsByTag(events : Set<NostrEvent>, protocol : NostrProtocol<any>, tag = "p", rateeindex = 1, scoreindex? : number) : Promise<PartialRatingsList> {
   console.log("GrapeRank : nostr protocol : applyRatingsByTag()")
-  let ratings : RatingsList = [],
+  let ratings : PartialRatingsList = [],
     numevents : number = events.size, 
     eventindex : number = 0, 
     numratings : number , 
     numskipped : number,
-    ratingpartial : Partial<Rating> = {
-      // apply a single score for all ratings, as indicated in params.score
-      score : protocol.params?.score as number || 0,
-      confidence : protocol.params?.confidence as number || .5,
-    }
+    // apply a single score for all ratings, as indicated in params.score
+    defaultscore = protocol.params?.score as number || 0,
+    defaultconfidence = protocol.params?.confidence as number || .5
   // loop through all events to find tags for making new ratings
   for(const event of events) {
     eventindex ++
     // console.log("GrapeRank : applyRatingsByTag : proccessing event "+eventindex+"/"+numevents+" with " + event.tags.length + " tags")
-    let eventratings : RatingsList = []
+    let eventratings : PartialRatingsList = []
     // loop through all tags of each event to find the ones to make ratings from
+    // TODO iterate if more than 10000 tags in this event
     if(!!event.tags && event.tags.length < 10000){
       numratings = 0
       numskipped = 0
       for(let t in event.tags){
         // `tag` argument defines what event tag to makes ratings from
         if(event.tags[t][0] == tag){
-          let rating = {...ratingpartial}
-          // if `scoreindex` argument has been defined...
-          // and if the value of this tag[scoreindex] is a property in params ...
-          // then apply a custom score per rating according to the index value in params
-          if(scoreindex && protocol.params) {
-            rating.score = protocol.params[event.tags[t][scoreindex]] as unknown as number || 0
+          let rating = { 
+            confidence : defaultconfidence,
+            // if `scoreindex` argument has been defined...
+            // and if the value of this tag[scoreindex] is a property in params ...
+            // then apply a custom score per rating according to the index value in params
+            score : scoreindex && protocol.params ? protocol.params[event.tags[t][scoreindex]] as unknown as number : defaultscore || 0,
+            rater : event.pubkey,
+            // `rateeindex` argument determines the tag index from which to get 
+            // the ID of what's been rated
+            ratee : event.tags[t][rateeindex]
           }
-          rating.rater = event.pubkey
-          // `rateeindex` argument determines the tag index from which to get 
-          // the ID of what's been rated
-          rating.ratee = event.tags[t][rateeindex]
-          eventratings.push(rating as Rating)
+          eventratings.push(rating)
           numratings ++
         }else{
           numskipped ++

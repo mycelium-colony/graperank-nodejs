@@ -13,7 +13,7 @@ export const mutes = new NostrProtocol<MutesParams>(
     confidence : .5
   },
   undefined,
-  (events : Set<NostrEvent>, params : MutesParams) : Promise<types.RatingsList> => {
+  (events : Set<NostrEvent>, params : MutesParams) : Promise<types.PartialRatingsList> => {
     return applyRatingsByTag(events,mutes)
   }
 )

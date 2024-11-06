@@ -13,7 +13,7 @@ export const follows = new NostrProtocol<FollowsParams>(
     confidence : .5
   },
   validateEachEventHasAuthor,
-  (events : Set<NostrEvent>, params : FollowsParams) : Promise<types.RatingsList> => {
+  (events : Set<NostrEvent>, params : FollowsParams) : Promise<types.PartialRatingsList> => {
     return applyRatingsByTag(events,follows)
   }
 )

@@ -13,7 +13,7 @@ export interface InterpretationProtocol {
   // a callback to fetch data. called by InterpretationAPI
   fetchData(raters: Set<types.userId>, filter? : object) : Promise<void>
   // a callback for interpreting data. called by InterpretationAPI
-  interpret(params? : types.ProtocolParams) : Promise<types.RatingsList>
+  interpret(params? : types.ProtocolParams) : Promise<types.PartialRatingsList>
 }
 
 /******* DEMO *********
@@ -25,7 +25,7 @@ class MyDemoInterpreter<ParamsType extends types.ProtocolParams> implements Inte
 
   constructor(
     readonly defaults : ParamsType,
-    readonly interpret : (params : ParamsType) => Promise<types.RatingsList>,
+    readonly interpret : (params : ParamsType) => Promise<types.PartialRatingsList>,
   ){}
 
   async fetchData(raters:Set<types.userId>){
@@ -42,7 +42,7 @@ interface MyProtocolParams extends types.ProtocolParams {
 const myprotocol = new MyDemoInterpreter<MyProtocolParams> (
   {   foo : true  },
   async (params?: MyProtocolParams) => {
-    let R : types.RatingsList = []
+    let R : types.PartialRatingsList = []
     return R
   }
 )

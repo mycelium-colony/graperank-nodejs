@@ -27,7 +27,7 @@ export const reports = new NostrProtocol<ReportsParams>(
     other : 0, // for reports that don't fit in the above categories
   },
   undefined,
-  (events : Set<NostrEvent>, params : ReportsParams) : Promise<types.RatingsList> => {
+  (events : Set<NostrEvent>, params : ReportsParams) : Promise<types.PartialRatingsList> => {
     return applyRatingsByTag(events,reports, 'P', 1, 2)
   }
 )

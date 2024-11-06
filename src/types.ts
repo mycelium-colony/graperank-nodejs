@@ -32,7 +32,7 @@ export type WorldviewSettings = {
   // any worldview MAY use another (calculated) grapevine as input
   input? : GrapevineKeys,
   // any number of interpreters may be processed in a given worldview.
-  interpreters: InterpreterRequest[],
+  interpreters: ProtocolRequest[],
   calculator?: Partial<CalculatorParams>,
 }
 
@@ -77,9 +77,13 @@ export type ScorecardData = {
   score? : number, // influence score
   // TODO add calculated weights to scorecard data
   // input = the sums of weights and weighted from each protocol in this calculation
-  input? : Record<protocol ,ScorecardInputRecord >
+  input? : ScorecardInput
 }
-export type ScorecardInputRecord = {count:number, weights:number, weighted:number}
+export type ScorecardInput = {
+  count : Record<protocol,number>, // number of ratings used this scorecard, grouped by protocol name
+  dos : number, // the min nonzero `iteration` value from ALL ratings for this scorecard
+  weights : number, // sum of weights for ALL ratings for this scorecard
+}
 
 // export type ScorecardDataTuple = [number,number] // [score, confidence]
 
@@ -88,7 +92,7 @@ export interface ScorecardExport extends Required<Scorecard> {}
 
 
 // `Calculation` interfaces
-export type WorldviewCalcululation = { 
+export type WorldviewCalculation = { 
   timestamp : timestamp,
   grapevine : GrapevineDataStorage,
   scorecards : ScorecardsDataStorage
@@ -208,8 +212,19 @@ export type ApiTypeOperation = {
 }
 
 
+export type InterpreterResults = {
+  ratings : RatingsList
+  responses : ProtocolResponse[]
+}
+export type ProtocolResponse = {
+  protocol : protocol
+  iteration : number
+  numraters? : number
+  numfetched? : number
+  numratings? : number
+}
 
-export type InterpreterRequest = {
+export type ProtocolRequest = {
   domain? : string,
   protocol : protocol // '[source]-[datatype]' : 'nostr-follows' 
   params? : ProtocolParams
@@ -277,13 +292,16 @@ export type JsonSchema = {
  * input for GrapeRank calculations
  */
 // TODO rename `Rating` to `Interpretation` 
-export type RatingsList = Rating[] 
+export type RatingsList = Required<Rating>[]
+export type PartialRatingsList = Rating[] 
+
 
 export type Rating = {
   // observer? : userId,
   rater : userId,
   ratee : elemId,
-  protocol : protocol // '[source]-[dataype]' : 'nostr-follows' 
+  protocol? : protocol // '[source]-[dataype]' : 'nostr-follows' 
+  iteration? : number // minimum nonzero protocol iteration => DOS for this protocol in ratee scorecard
   confidence : number // 0 - 1
   // TODO rename 'score' to `value`
   score : number // 0 or 1 / percent
