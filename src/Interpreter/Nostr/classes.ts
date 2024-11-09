@@ -26,24 +26,38 @@ const relays = [
 ]
 
 const maxauthors = 1000
+type  NostrProtocolConfig<ParamsType extends ProtocolParams> = {
+  kinds : number[],
+  defaults : ParamsType,
+  interpret? : 
+    (events:Set<NostrEvent>, params : ParamsType) 
+    => Promise<PartialRatingsList>,
+  validate? : 
+    (events : Set<NostrEvent>, authors : userId[], previous? : Set<NostrEvent>) 
+    => boolean | userId[],
+}
 
 export class NostrProtocol<ParamsType extends ProtocolParams> implements InterpretationProtocol {
+  readonly kinds : number[]
+  readonly defaults : ParamsType
   params : ParamsType
   dataset : Set<NostrEvent> = new Set()
   interpret : (params : ParamsType) => Promise<PartialRatingsList>
+  validate? : 
+  (events : Set<NostrEvent>, authors : userId[], previous? : Set<NostrEvent>) 
+  => boolean | userId[]
 
-  constructor( 
-    readonly kinds : number[],
-    readonly defaults : ParamsType,
-    readonly validate? : (events : Set<NostrEvent>, authors : userId[], previous? : Set<NostrEvent>) => boolean | userId[],
-    interpret? : (events:Set<NostrEvent>, params : ParamsType) => Promise<PartialRatingsList>
-  ){
+  constructor(config: NostrProtocolConfig<ParamsType>){
+    this.kinds = config.kinds
+    this.defaults = config.defaults
+    this.validate = config.validate
+
     this.interpret = async (params:ParamsType) => {
       console.log("GrapeRank : nostr protocol : interptreting " +this.dataset.size+ " events")
       this.params = {...this.defaults, ...params}
       let ratings = 
-        interpret ? await interpret(this.dataset, this.params) :
-        await applyRatingsByTag(this.dataset, this)
+        config.interpret ? await config.interpret(this.dataset, this.params) :
+        await applyRatingsByTag(this.dataset, params)
       console.log("GrapeRank : nostr protocol : interptreting "+ratings.length+" ratings")
       return ratings
     }
@@ -124,7 +138,7 @@ export class NostrProtocol<ParamsType extends ProtocolParams> implements Interpr
 }
 
 
-export async function  applyRatingsByTag(events : Set<NostrEvent>, protocol : NostrProtocol<any>, tag = "p", rateeindex = 1, scoreindex? : number) : Promise<PartialRatingsList> {
+export async function  applyRatingsByTag(events : Set<NostrEvent>, params : ProtocolParams, tag = "p", rateeindex = 1, scoreindex? : number) : Promise<PartialRatingsList> {
   console.log("GrapeRank : nostr protocol : applyRatingsByTag()")
   let ratings : PartialRatingsList = [],
     numevents : number = events.size, 
@@ -132,8 +146,8 @@ export async function  applyRatingsByTag(events : Set<NostrEvent>, protocol : No
     numratings : number , 
     numskipped : number,
     // apply a single score for all ratings, as indicated in params.score
-    defaultscore = protocol.params?.score as number || 0,
-    defaultconfidence = protocol.params?.confidence as number || .5
+    defaultscore = params.score as number || 0,
+    defaultconfidence = params.confidence as number || .5
   // loop through all events to find tags for making new ratings
   for(const event of events) {
     eventindex ++
@@ -152,7 +166,7 @@ export async function  applyRatingsByTag(events : Set<NostrEvent>, protocol : No
             // if `scoreindex` argument has been defined...
             // and if the value of this tag[scoreindex] is a property in params ...
             // then apply a custom score per rating according to the index value in params
-            score : scoreindex && protocol.params ? protocol.params[event.tags[t][scoreindex]] as unknown as number : defaultscore || 0,
+            score : scoreindex ? params[event.tags[t][scoreindex]] as unknown as number : defaultscore || 0,
             rater : event.pubkey,
             // `rateeindex` argument determines the tag index from which to get 
             // the ID of what's been rated

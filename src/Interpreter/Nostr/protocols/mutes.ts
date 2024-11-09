@@ -6,14 +6,16 @@ interface MutesParams extends types.ProtocolParams {
 
 }
 
-export const mutes = new NostrProtocol<MutesParams>(
-  [10000],
-  {
+export const mutes = new NostrProtocol<MutesParams>({
+  kinds : [10000],
+
+  defaults : {
     score : 0,
     confidence : .5
   },
-  undefined,
-  (events : Set<NostrEvent>, params : MutesParams) : Promise<types.PartialRatingsList> => {
+
+  interpret : (events : Set<NostrEvent>, params : MutesParams) => {
     return applyRatingsByTag(events,mutes)
   }
-)
+  
+})

@@ -14,9 +14,10 @@ interface ReportsParams extends types.ProtocolParams {
   other : types.oneorzero, // for reports that don't fit in the above categories
 }
 
-export const reports = new NostrProtocol<ReportsParams>(
-  [1984],
-  {
+export const reports = new NostrProtocol<ReportsParams>({
+  kinds : [1984],
+
+  defaults : {
     confidence : .5,
     nudity : 0, // depictions of nudity, porn, etc.
     malware : 0, // virus, trojan horse, worm, robot, spyware, adware, back door, ransomware, rootkit, kidnapper, etc.
@@ -26,8 +27,8 @@ export const reports = new NostrProtocol<ReportsParams>(
     impersonation : 0, // someone pretending to be someone else
     other : 0, // for reports that don't fit in the above categories
   },
-  undefined,
-  (events : Set<NostrEvent>, params : ReportsParams) : Promise<types.PartialRatingsList> => {
+
+  interpret : (events : Set<NostrEvent>, params : ReportsParams) => {
     return applyRatingsByTag(events,reports, 'P', 1, 2)
   }
-)
+})
