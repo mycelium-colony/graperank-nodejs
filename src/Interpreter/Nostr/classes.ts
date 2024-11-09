@@ -57,7 +57,7 @@ export class NostrProtocol<ParamsType extends ProtocolParams> implements Interpr
       this.params = {...this.defaults, ...params}
       let ratings = 
         config.interpret ? await config.interpret(this.dataset, this.params) :
-        await applyRatingsByTag(this.dataset, params)
+        await applyRatingsByTag(this.dataset, this.params)
       console.log("GrapeRank : nostr protocol : interptreting "+ratings.length+" ratings")
       return ratings
     }
