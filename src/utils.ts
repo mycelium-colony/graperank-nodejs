@@ -8,6 +8,21 @@
  * https://stackoverflow.com/questions/20936486/node-js-maximum-call-stack-size-exceeded
  */
 
+export async function filterBigArray<T>(bigarray : T[], predicate: (value: T, index: number, array: T[]) => unknown, thisArg? : any, max = 1000) : Promise<T[]>{
+  const filtered : T[] = []
+  const slices = await sliceBigArray<T>(bigarray, max)
+  for(let s in slices){ 
+    filtered.push( 
+      ... await new Promise<T[]>( (resolve) => {
+        setTimeout( () => { resolve(
+          slices[s].filter(predicate,thisArg)
+        )}, 0 )
+      })
+    )
+  }
+  return filtered
+}
+
 export async function forEachBigArray<T>(bigarray : T[], callbackfn : (value: T, index: number, array: T[]) => void, thisArg? : any, max = 1000) : Promise<void>{
   const slices = await sliceBigArray<T>(bigarray, max)
   for(let s in slices){ 
