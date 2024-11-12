@@ -12,13 +12,13 @@ export async function filterBigArray<T>(bigarray : T[], predicate: (value: T, in
   const filtered : T[] = []
   const slices = await sliceBigArray<T>(bigarray, max)
   for(let s in slices){ 
-    filtered.push( 
-      ... await new Promise<T[]>( (resolve) => {
+      await new Promise<T[]>( (resolve) => {
         setTimeout( () => { resolve(
           slices[s].filter(predicate,thisArg)
         )}, 0 )
       })
-    )
+      .then((subset)=> filtered.push(...subset))
+      .catch((e)=> console.log('GrapeRank : ERROR processing filterBigArray : ',e))
   }
   return filtered
 }
@@ -39,13 +39,13 @@ export async function mergeBigArrays<T>(array1 : T[], array2 : T[], max = 1000) 
   const merged : T[] = [...array1]
   const slices = await sliceBigArray<T>(array2, max)
   for(let s in slices){ 
-    merged.push(
-      ... await new Promise<T[]>( (resolve) => {
+await new Promise<T[]>( (resolve) => {
         setTimeout( () => { 
           resolve(slices[s]) 
         }, 0 )
       })
-    )
+      .then((subset)=> merged.push(...subset))
+      .catch((e)=> console.log('GrapeRank : ERROR processing mergeBigArrays : ',e))
   }
   return merged
 }
@@ -56,11 +56,13 @@ export async function sliceBigArray<T>(array : T[], max = 1000) : Promise<T[][]>
   let slicestart = 0
   let sliceend = max
   while(slicestart < array.length){
-    sliced.push(await new Promise<T[]>( (resolve) => {
+    await new Promise<T[]>( (resolve) => {
       setTimeout( () => { 
         resolve(array.slice(slicestart,sliceend)) 
       }, 0 )
-    }))
+    })
+    .then((subset)=> sliced.push(subset))
+    .catch((e)=> console.log('GrapeRank : ERROR processing sliceBigArray : ',e))
     slicestart = sliceend
     sliceend = slicestart+max
   }

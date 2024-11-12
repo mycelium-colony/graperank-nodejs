@@ -10,7 +10,7 @@ export const follows = new NostrProtocol<FollowsParams>({
 
   kinds: [3],
 
-  defaults : {
+  params : {
     score : 1,
     confidence : .5
   },
@@ -18,7 +18,7 @@ export const follows = new NostrProtocol<FollowsParams>({
   validate : validateEachEventHasAuthor,
 
   interpret : (events : Set<NostrEvent>, params : FollowsParams) => {
-    return applyRatingsByTag(events,follows)
+    return applyRatingsByTag(events, params)
   }
 
 })

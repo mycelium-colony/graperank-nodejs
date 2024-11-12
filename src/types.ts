@@ -232,8 +232,8 @@ export type ProtocolRequest = {
 }
 
 export type ProtocolParams = {
-  score? : number,
-  confidence? : number,
+  score : number,
+  confidence : number,
   iterate? : number, 
   [param:string] : ParamValue | undefined,
 }

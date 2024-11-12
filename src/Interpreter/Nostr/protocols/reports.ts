@@ -17,7 +17,8 @@ interface ReportsParams extends types.ProtocolParams {
 export const reports = new NostrProtocol<ReportsParams>({
   kinds : [1984],
 
-  defaults : {
+  params : {
+    score : 0,
     confidence : .5,
     nudity : 0, // depictions of nudity, porn, etc.
     malware : 0, // virus, trojan horse, worm, robot, spyware, adware, back door, ransomware, rootkit, kidnapper, etc.
@@ -29,6 +30,6 @@ export const reports = new NostrProtocol<ReportsParams>({
   },
 
   interpret : (events : Set<NostrEvent>, params : ReportsParams) => {
-    return applyRatingsByTag(events,reports, 'P', 1, 2)
+    return applyRatingsByTag(events,params, 'P', 1, 2)
   }
 })

@@ -9,13 +9,13 @@ interface MutesParams extends types.ProtocolParams {
 export const mutes = new NostrProtocol<MutesParams>({
   kinds : [10000],
 
-  defaults : {
+  params : {
     score : 0,
     confidence : .5
   },
 
   interpret : (events : Set<NostrEvent>, params : MutesParams) => {
-    return applyRatingsByTag(events,mutes)
+    return applyRatingsByTag(events,params)
   }
   
 })

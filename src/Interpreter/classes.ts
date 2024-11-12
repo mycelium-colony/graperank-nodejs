@@ -2,12 +2,10 @@ import * as types from "../types.ts"
 
 
 export interface InterpretationProtocol {
-  // input params for each instance
-  readonly params : types.ProtocolParams
   // outputs JsonDoc formatted schema of allowed params for API documentation of each instance
   readonly schema? : string
-  // default params for each kind to be interpreted
-  readonly defaults : types.ProtocolParams
+  // default params for interpretation
+  readonly params : types.ProtocolParams
   // private storage for the data set returned by fetchData()
   readonly dataset : Set<any>
   // a callback to fetch data. called by InterpretationAPI
