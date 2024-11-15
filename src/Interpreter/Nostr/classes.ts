@@ -162,9 +162,9 @@ export async function  applyRatingsByTag(events : Set<NostrEvent>, params : Prot
         if(event.tags[t][0] == tag){
           // validate pubkey before applying a rating
           if(tag == 'p' && rateeindex == 1 && !validatePubkey(event.tags[t][1])) {
-            if(!tagskipped) 
-              console.log("GrapeRank : nostr protocol : applyRatingsByTag : validating event : ", {kind:event.kind,pubkey:event.pubkey})
-            console.log("GrapeRank : nostr protocol : applyRatingsByTag : validation failed for 'p' tag : ", event.tags[t])
+            // if(!tagskipped) 
+            //   console.log("GrapeRank : nostr protocol : applyRatingsByTag : validating event : ", {kind:event.kind,pubkey:event.pubkey})
+            // console.log("GrapeRank : nostr protocol : applyRatingsByTag : validation failed for 'p' tag : ", event.tags[t])
             tagskipped ++
             break
           }
@@ -182,7 +182,7 @@ export async function  applyRatingsByTag(events : Set<NostrEvent>, params : Prot
           tagsrated ++
         }
       }
-      console.log("GrapeRank : applyRatingsByTag : event processed : ", +tagsrated+ " tags rated : ",  +tagskipped+ " tags skipped")
+      // console.log("GrapeRank : applyRatingsByTag : event processed : ", +tagsrated+ " tags rated : ",  +tagskipped+ " tags skipped")
     }else{
       console.log("GrapeRank : nostr protocol : applyRatingsByTag : event not processed")
     }
