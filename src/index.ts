@@ -245,7 +245,7 @@ const worldviewpresets : Record<string,WorldviewSettings> = {
     interpreters : [
       {
         protocol : "nostr-follows",
-        params : {iterate : 6 }
+        iterate : 6
       },
       // {
       //   protocol : "nostr-mutes",
@@ -262,7 +262,7 @@ const worldviewpresets : Record<string,WorldviewSettings> = {
     interpreters : [
       {
         protocol : "nostr-follows",
-        params : {iterate : 6 }
+        iterate : 6
       },
       {
         protocol : "nostr-mutes",

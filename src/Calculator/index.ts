@@ -194,13 +194,10 @@ class ScorecardCalculator {
       console.log("GrapeRank : ScorecardCalculator : WARNING ratercard.subject does not match rating.rater")
       return
     }
-    // only run sum() UNTIL summed is complete
-    // if(this.summed) return
+
     // only run sum() if calculator iterations are NOT completed
     if(this.calculated) return
 
-
-    // let oldsums = {...this._sums}
     // determine rater influence
     let influence = rating.rater == keys.observer ? 1 : ratercard?.score ? ratercard.score as number : 0
     let weight = influence * rating.confidence; 
@@ -208,30 +205,27 @@ class ScorecardCalculator {
     if (rating.rater != keys.observer) 
       weight = weight * (calculator.attenuation);
 
-    // count = number of ratings used to calculate this scorecard, grouped by protocol name
-    let count = this._input?.count ? this._input.count : {}
-    count[rating.protocol] = (this._input?.count[rating.protocol] || 0) + 1 
-    // dos = the minimum nonzero iteration number for ratings used to calculate this scorecard 
-    let dos = rating.iteration && this._input?.dos && rating.iteration < this._input.dos ? rating.iteration : this._input?.dos || rating.iteration
-    // weights = sum of weights for ALL ratings used to calculate this scorecard
-    let weights = this._sums.weights += weight
-
-    // TODO refactor `this._sums` to hold values for scorecard.input
-    this._input = { count, weights, dos }
-
     // add to sums
-    this._sums.weights = weights
+    this._sums.weights += weight
     this._sums.products += weight * rating.score
 
-    // increment sumcount to reflect how many times sum() has been run
-    // this._sumcount ++
+    // add input data from ratings
+    this._input = { 
+      // count = number of ratings used to calculate this scorecard, grouped by protocol name
+      count : 
+        {
+          ...this._input?.count,
+          [rating.protocol] : (this._input?.count[rating.protocol] || 0) + 1
+        },
+      // dos = the minimum nonzero iteration number for ratings used to calculate this scorecard 
+      dos : 
+        rating.iteration && this._input?.dos && rating.iteration < this._input.dos ? 
+          rating.iteration : this._input?.dos || rating.iteration,
+      // weights = sum of weights for ALL ratings used to calculate this scorecard
+      weights : 
+        this._sums.weights
+    }
 
-    // if(this.scorecard?.subject == settings.dev.sampleratee && ratercard?.subject  == settings.dev.samplerater){
-    //   console.log("GrapeRank : ScorecardCalculator : sample rater : influence = ", ratercard?.score as number)
-    //   console.log("GrapeRank : ScorecardCalculator : sample rater : rating.score = ", rating.score as number)
-    //   // console.log("GrapeRank : ScorecardCalculator : sample rater : old scorercard.sums = ", oldsums)
-    //   console.log("GrapeRank : ScorecardCalculator : sample rater : new scorecard.sums = ", this._sums)
-    // }
   }
 
   // STEP C : calculate influence

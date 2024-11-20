@@ -34,7 +34,7 @@ export async function interpret(raters:userId[], requests? : ProtocolRequest[] )
       newraters = new Set() 
       newratings = [] 
       thisiteration = 0
-      maxiterations = request.params?.iterate || 1
+      maxiterations = request.iterate || 1
       if(request.authors && request.authors.length) requestauthors = new Set(request.authors)
 
       // console.log("GrapeRank : interpret : calling " +request.protocol+" protocol with ", maxiterations," iterations")
@@ -124,6 +124,9 @@ function getProtocolInstance(source:string, datatype:string,) : InterpretationPr
   return instance
 }
 
+// FIXME this ONLY works when USERS are being rated, not CONTENT
+// TODO extraction of new authors from rated content 
+// will need to be handled by each protocol ...  
 function getNewRaters(ratings : Rating[], allraters? : Map<userId, number>) : Set<userId>{
   let newraters : Set<userId> = new Set()
   for(let r in ratings){

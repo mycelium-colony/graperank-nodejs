@@ -225,18 +225,31 @@ export type ProtocolResponse = {
 }
 
 export type ProtocolRequest = {
+  // should the interpretation protocol be requested from another domain?
+  // TODO specify an API over HTTP for ProtocolRequest and InterpreterResults 
   domain? : string,
-  protocol : protocol // '[source]-[datatype]' : 'nostr-follows' 
+  // machine readable name of the protocol 
+  // in the format : '[source]-[datatype]', eg : 'nostr-follows' 
+  protocol : protocol 
+  // params to pass to the protocol
+  // used for interpreting fetched content as new ratings
   params? : ProtocolParams
+  // how deep should the protocol be run?
+  // each iteration generates a list of new ratings from input authors
+  // and also a list of new authors from each content or user being rated
+  // this will be used as author input for the next iteration.
+  iterate? : number,
+  // initial authors list for fetching content and generating ratings
+  // if left blank, observer ID will be used as a single author
   authors? : userId[] // optional alist of userId
 }
 
 export type ProtocolParams = {
   score : number,
   confidence : number,
-  iterate? : number, 
   [param:string] : ParamValue | undefined,
 }
+
 export type CalculatorParams = {
   // default infulence score 
   // score : number 
