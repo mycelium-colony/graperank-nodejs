@@ -20,8 +20,8 @@ export async function interpret(raters:userId[], requests? : ProtocolRequest[] )
   let requestauthors : Set<userId> | undefined
 
   if(!!raters && !!requests){
-    console.log("GrapeRank : interpret : requesting ",requests.length, " protocols for ",raters.length," raters")
-
+    console.log("GrapeRank : interpret : instantiating ",requests.length, " protocols for ",raters.length," raters")
+    console.log("----------------------------------")
     // add input raters to allraters
     raters.forEach((userid) => allraters.set(userid,0))
 
@@ -44,7 +44,7 @@ export async function interpret(raters:userId[], requests? : ProtocolRequest[] )
         // increment for each protocol iteration
         thisiteration ++
         thisiterationraters = requestauthors || newraters.size ?  newraters : new Set(allraters.keys())
-        console.log("GrapeRank : interpret : "+request.protocol+" protocol : iteration begin ", thisiteration, " of ", maxiterations)
+        console.log("GrapeRank : interpret : "+request.protocol+" protocol : begin iteration ", thisiteration, " of ", maxiterations)
         console.log("GrapeRank : interpret : "+request.protocol+" protocol : fetching ratings from ", thisiterationraters.size," raters")
 
 
@@ -53,18 +53,18 @@ export async function interpret(raters:userId[], requests? : ProtocolRequest[] )
           await protocolFetchData(request.protocol, thisiterationraters)
           // interpret dataset and add to ratings
           newratings = await protocolInterpret(request.protocol, thisiteration, request.params)
+          console.log("GrapeRank : interpret : "+request.protocol+" protocol : added " ,newratings.length, " new ratings, for a total of ",ratings.length)
 
-          // get new raters from ratings for next iteration
+          // get new raters ONLY IF not on final iteration
           if(thisiteration < maxiterations) {
-            newraters = getNewRaters(ratings, allraters)
+            newraters = getNewRaters(newratings, allraters)
             // merge all raters to include new raters
             newraters.forEach((rater) => allraters.set(rater, thisiteration))
-            // add iteration number (as dos) to rating
+            console.log("GrapeRank : interpret : "+request.protocol+" protocol : added " ,newraters.size, " new raters, for a total of ", allraters.size)
           }
-
+          // merge newratings with ratings
           // handle big arrays with care
           ratings = await mergeBigArrays(newratings,ratings)
-          console.log("GrapeRank : interpret : "+request.protocol+" protocol : retrieved " ,ratings.length, " records")
         }catch(e){
           console.log('GrapeRank : interpret : ERROR : ',e)
         }
@@ -78,8 +78,8 @@ export async function interpret(raters:userId[], requests? : ProtocolRequest[] )
           numratings : newratings.length
         })
 
-        console.log("GrapeRank : interpret : "+request.protocol+" protocol : iteration end : added ",newratings.length, " ratings and " ,newraters.size, " new raters ")
-        
+        console.log("GrapeRank : interpret : "+request.protocol+" protocol : end iteration ", thisiteration, " of ", maxiterations)
+        console.log("----------------------------------")
       }
 
       // TODO merge/purge duplicate or conflicting ratings ?
@@ -106,7 +106,7 @@ async function protocolInterpret(protocol:protocol, iteration: number, params? :
     if(ratings[r].score == 0) numzero ++
   }
 
-  console.log("GrapeRank : interpret : "+protocol+" protocol : iteration "+iteration+" : number of zero scored ratings = "+numzero+" of "+ratings.length+" ratings")
+  console.log("GrapeRank : interpret : "+protocol+" protocol : number of zero scored ratings = "+numzero+" of "+ratings.length+" ratings")
   return ratings as RatingsList
 }
 
@@ -127,11 +127,11 @@ function getProtocolInstance(source:string, datatype:string,) : InterpretationPr
 // FIXME this ONLY works when USERS are being rated, not CONTENT
 // TODO extraction of new authors from rated content 
 // will need to be handled by each protocol ...  
-function getNewRaters(ratings : Rating[], allraters? : Map<userId, number>) : Set<userId>{
+function getNewRaters(newratings : Rating[], allraters? : Map<userId, number>) : Set<userId>{
   let newraters : Set<userId> = new Set()
-  for(let r in ratings){
-    if(!allraters || !allraters.has(ratings[r].ratee)) 
-      newraters.add(ratings[r].ratee)
+  for(let r in newratings){
+    if(!allraters || !allraters.has(newratings[r].ratee)) 
+      newraters.add(newratings[r].ratee)
   }
   return newraters
 }

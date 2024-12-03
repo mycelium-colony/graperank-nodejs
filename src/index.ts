@@ -247,12 +247,12 @@ const worldviewpresets : Record<string,WorldviewSettings> = {
         protocol : "nostr-follows",
         iterate : 6
       },
-      // {
-      //   protocol : "nostr-mutes",
-      // },
-      // {
-      //   protocol : "nostr-reports",
-      // }
+      {
+        protocol : "nostr-mutes",
+      },
+      {
+        protocol : "nostr-reports",
+      }
     ],
     calculator : undefined,
     input : undefined
