@@ -138,7 +138,7 @@ class GrapevineKey implements ScorecardKeys {
     }
   }
 
-  constructor(card:ScorecardKeys | Rating, merge? : Partial<Scorecard>, overwrite = false) {
+  constructor(card:ScorecardKeys | Scorecard | Rating, merge? : Partial<Scorecard>, overwrite = false) {
     this.subject = 
       overwrite && merge?.subject ? merge.subject : 
       'subject' in card  &&  card.subject ? card.subject  : 
@@ -182,7 +182,7 @@ class GrapevineValue implements ScorecardData {
     return {
       confidence : 0,
       score : 0,
-      input : {},
+      input : { count:{}, dos:0, weights:0},
       ...from 
     }
   }

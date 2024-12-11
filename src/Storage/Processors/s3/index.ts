@@ -1,5 +1,5 @@
 import { StorageDataOperations, StorageFileList,  } from "../.."
-import { GrapevineDataStorage, GrapevineKeys, ScorecardExport, ScorecardKeys, ApiKeysTypes, WorldviewKeys, WorldviewDataStorage, ApiTypeName, ScorecardsDataStorage } from "../../../types"
+import { GrapevineData, GrapevineKeys, ScorecardExport, ScorecardKeys, ApiKeysTypes, WorldviewKeys, WorldviewData, ApiTypeName, ScorecardsRecord } from "../../../types"
 import { forEachBigArray } from "../../../utils"
 import { s3 } from "./s3api"
 
@@ -11,7 +11,7 @@ export class s3Processor implements StorageDataOperations {
     },
 
     // store the worldview settings event for calculating a grapevine
-    async put(keys : WorldviewKeys, data : WorldviewDataStorage) {
+    async put(keys : WorldviewKeys, data : WorldviewData) {
       let success = false
       let s3key = s3Processor.key('worldview',keys)
       if(s3key) success = await s3.put(s3key,data, true)
@@ -20,7 +20,7 @@ export class s3Processor implements StorageDataOperations {
 
     // retrieve the worldview settings event for calculating a grapevine
     async get(keys : WorldviewKeys) {
-      let data : WorldviewDataStorage | undefined
+      let data : WorldviewData | undefined
       let s3key = s3Processor.key('worldview',keys)
       if(s3key) data = await s3.get(s3key)
       return data 
@@ -36,7 +36,7 @@ export class s3Processor implements StorageDataOperations {
     },
 
     async get(keys : GrapevineKeys) {
-      let data : GrapevineDataStorage | undefined
+      let data : GrapevineData | undefined
       let s3key = s3Processor.key('grapevine',keys)
       if(s3key) data = await s3.get(s3key)
       return data 
@@ -44,7 +44,7 @@ export class s3Processor implements StorageDataOperations {
 
     // store summary and metadata as new grapevine
     // store each score individually
-    async put(keys : Required<GrapevineKeys>, data : GrapevineDataStorage) {
+    async put(keys : Required<GrapevineKeys>, data : GrapevineData) {
       let success = false
       // get s3key for grapevine data
       let grapevinekey = s3Processor.key('grapevine',keys)
@@ -101,14 +101,14 @@ export class s3Processor implements StorageDataOperations {
       return await s3Processor.filelist('scorecards', keys, getall)
     },
     async get(keys : GrapevineKeys) {
-      let data : ScorecardsDataStorage | undefined
+      let data : ScorecardsRecord | undefined
       let s3key = s3Processor.key('scorecards',keys)
       if(s3key) data = await s3.get(s3key)
       return data 
     },
     // put all scorecards for a grapevine
     // TODO delete scorecards or try again if put returns false
-    async put(keys : Required<GrapevineKeys>, data : ScorecardsDataStorage){
+    async put(keys : Required<GrapevineKeys>, data : ScorecardsRecord){
       let s3key = s3Processor.key('scorecards',keys)
       if(s3key) return await s3.put(s3key,data, true)
       return false

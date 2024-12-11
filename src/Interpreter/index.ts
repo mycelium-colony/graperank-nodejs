@@ -29,7 +29,8 @@ export async function interpret(raters:userId[], requests? : ProtocolRequest[] )
     // requests having `iterations` will ADD to `allraters` with each interation
     // each request will use the `allraters` list from previous requests
     for(let r in requests){
-      request = requests[r]
+      let requestindex = r as unknown as number
+      request = requests[requestindex]
       // reset new raters and new ratings between protocol requests
       newraters = new Set() 
       newratings = [] 
@@ -52,7 +53,7 @@ export async function interpret(raters:userId[], requests? : ProtocolRequest[] )
           // fetch protocol specific dataset for requestauthors OR newraters OR allraters
           await protocolFetchData(request.protocol, thisiterationraters)
           // interpret dataset and add to ratings
-          newratings = await protocolInterpret(request.protocol, thisiteration, request.params)
+          newratings = await protocolInterpret(request.protocol, requestindex, thisiteration, request.params)
           console.log("GrapeRank : interpret : "+request.protocol+" protocol : added " ,newratings.length, " new ratings, for a total of ",ratings.length)
 
           // get new raters ONLY IF not on final iteration
@@ -71,6 +72,7 @@ export async function interpret(raters:userId[], requests? : ProtocolRequest[] )
 
         responses.push({
           protocol : request.protocol,
+          index : requestindex,
           iteration : thisiteration,
           numraters : thisiterationraters.size,
           // TODO get numfetched from protocol
@@ -95,13 +97,14 @@ async function protocolFetchData(protocol:protocol, raters: Set<userId>){
   return await instance.fetchData(raters)
 }
 
-async function protocolInterpret(protocol:protocol, iteration: number, params? : ProtocolParams ): Promise<RatingsList>{
+async function protocolInterpret(protocol:protocol, index : number, iteration: number, params? : ProtocolParams ): Promise<RatingsList>{
   let [source,datatype] = parseProtocolSlug(protocol)
   let instance = getProtocolInstance(source, datatype)
   let numzero = 0
   let ratings = await instance.interpret(params)
   for(let r in ratings){
     ratings[r].protocol = protocol
+    ratings[r].index = index
     ratings[r].iteration = iteration
     if(ratings[r].score == 0) numzero ++
   }

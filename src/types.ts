@@ -1,4 +1,10 @@
 /**
+ * CONSTANTS
+ */
+export const DEMO_CONTEXT = "grapevine-web-of-trust-demo"
+export const DEFAULT_CONTEXT= "grapevine-web-of-trust"
+
+/**
  * Primitives
  */
 export type userId = string | number
@@ -26,10 +32,10 @@ export type WorldviewKeys = {
   context? : context,
 }
 export interface WorldviewData extends WorldviewSettings {
-  calculated : Map<timestamp, GrapevineData >
+  grapevines? : Grapevine[]
 }
 export type WorldviewSettings = {
-  // any worldview MAY use another (calculated) grapevine as input
+  // any worldview MAY use another worldview or (calculated) grapevine as input
   input? : GrapevineKeys,
   // any number of interpreters may be processed in a given worldview.
   interpreters: ProtocolRequest[],
@@ -44,14 +50,14 @@ export interface GrapevineKeys extends Required<WorldviewKeys> {
   timestamp? : timestamp, // timestamp of when scores were calculated
 }
 export interface GrapevineData extends GrapevineMeta, GrapevineScores {
-  summary : Map<scoreindex,number>, // number of calculated scorecards by scoreindex
+  summary : Record<scoreindex,number>, // number of calculated scorecards by scoreindex
 }
 export interface GrapevineMeta {
   expires? : number | false,
 }
 export interface GrapevineScores {
-  scorecards?: Map<elemId, ScorecardData>
-  scores? : Map<scoreindex, elemId[]> , // scorecard subjects grouped by scoreindex 
+  scorecards?: ScorecardsRecord
+  scores? : Record<scoreindex, elemId[]> , // scorecard subjects grouped by scoreindex 
 }
 
 // Scorecard interfaces
@@ -75,17 +81,26 @@ export type ScorecardData = {
   confidence? : number, // 
   // TODO rename `score` to `output`
   score? : number, // influence score
-  // TODO add calculated weights to scorecard data
-  // input = the sums of weights and weighted from each protocol in this calculation
-  input? : ScorecardInput
+  // meta = data collected from each protocol used for this calculation (in order of execution)
+  meta? : Record<protocol,ScorecardMeta>
 }
-export type ScorecardInput = {
-  count : Record<protocol,number>, // number of ratings used this scorecard, grouped by protocol name
-  dos : number, // the min nonzero `iteration` value from ALL ratings for this scorecard
-  weights : number, // sum of weights for ALL ratings for this scorecard
+export type ScorecardMeta = {
+  index : number,
+  dos : number, // minimum 'non-zero' protocol iteration where a rating was found for this subject (zero = not iterated)
+  weighted : number, // weighted sum of protocol ratings calculated in this scorecard
+  numRatings : number, // number of protocol ratings for this subject
+  numRatedBy : number, // number of protocol ratings by this subject for observer
 }
 
-// export type ScorecardDataTuple = [number,number] // [score, confidence]
+// let example = [['follows',1,34,340,1], ['mutes',0,2,2]]
+// export type ScorecardMetaTuple = [
+//   protocol, // protocol : machine-name string (or kind number) of the protocol used 
+//   number, // DOS : minumum 'non-zero' protocol iteration where a rating was found for this subject (zero = not iterated)
+//   number, // numWeighted : sum of weights for ratings in this scorecard
+//   number, // numRated : number of times this subject was rated
+//   number?, // numRatedBy : number of times this observer was rated by the subject
+// ]
+
 
 // ALL properties are required for scorecard export (to external services)
 export interface ScorecardExport extends Required<Scorecard> {}
@@ -94,27 +109,27 @@ export interface ScorecardExport extends Required<Scorecard> {}
 // `Calculation` interfaces
 export type WorldviewCalculation = { 
   timestamp : timestamp,
-  grapevine : GrapevineDataStorage,
-  scorecards : ScorecardsDataStorage
+  grapevine : GrapevineData,
+  scorecards : ScorecardsRecord
 }
 
 // `Storage` interfaces
 // Client-side maps are retrieved from storage as an Array of Arrays 
 // which may be passed to the Map constructor : `new Map(arrayfromstorage)`
 
-// When 'worldview' is requested from storage, WorldviewDataStorage is returned
-export interface WorldviewDataStorage extends WorldviewSettings {
-  calculated? : Array<[timestamp, GrapevineDataStorage]>
-}
+// When 'worldview' is requested from storage, WorldviewData is returned
+// export interface WorldviewData extends WorldviewSettings {
+//   calculated? : Array<[timestamp, GrapevineData]>
+// }
 
-// when 'grapevine' or GrapevineData is requested GrapevineDataStorage is returned
-export interface GrapevineDataStorage extends GrapevineMeta {
-  summary : GrapevineSummaryStorage, // number of calculated scorecards by scoreindex
-  // scorecards? : ScorecardsDataStorage
-}
-export interface GrapevineSummaryStorage extends Array<[scoreindex, number]>{}
-export interface ScorecardsDataStorage extends Array<[elemId, ScorecardData]>{}
-export interface ScorecardsDataMap extends Map<elemId, ScorecardData>{}
+// when 'grapevine' or GrapevineData is requested GrapevineData is returned
+// export interface GrapevineData extends GrapevineMeta {
+//   summary : GrapevineSummaryStorage, // number of calculated scorecards by scoreindex
+//   // scorecards? : ScorecardsRecord
+// }
+// export interface GrapevineSummaryStorage extends Array<[scoreindex, number]>{}
+// export interface ScorecardsRecord extends Array<[elemId, ScorecardData]>{}
+export interface ScorecardsRecord extends Record<elemId, ScorecardData>{}
 
 // When 'scores' are requested from storage, an array of score arrays is returned
 // which can be added and removed as needed from Grapevine.score
@@ -195,7 +210,7 @@ export interface ApiRequest extends EngineRequest{
 export type ApiTypeName =  'worldview' | 'grapevine' | 'scorecards' 
 export type ApiOperationName = 'list' | 'put' | 'get' | 'query' | 'delete'
 export type ApiKeysTypes = WorldviewKeys | GrapevineKeys | ScorecardKeys | Required<ScorecardKeys>
-export type ApiDataTypes = WorldviewDataStorage | GrapevineDataStorage | ScorecardsDataStorage
+export type ApiDataTypes = WorldviewData | GrapevineData | ScorecardsRecord
 
 export type ApiOperation = {
   list? : any
@@ -218,6 +233,7 @@ export type InterpreterResults = {
 }
 export type ProtocolResponse = {
   protocol : protocol
+  index : number
   iteration : number
   numraters? : number
   numfetched? : number
@@ -273,7 +289,7 @@ export type DevParams = {
 
 /**
  * GrapeRank Engine API Response
- * Returns `output` from engine as ScorecardDatas
+ * Returns `output` from engine as ScorecardData
  * 
  * MAY include `protocols` and `calculator` as JsonSchema 
  * parameter definitions for calling ApiRequest again,
@@ -314,6 +330,7 @@ export type Rating = {
   rater : userId,
   ratee : elemId,
   protocol? : protocol // '[source]-[dataype]' : 'nostr-follows' 
+  index? : number,
   iteration? : number // minimum nonzero protocol iteration => DOS for this protocol in ratee scorecard
   confidence : number // 0 - 1
   // TODO rename 'score' to `value`

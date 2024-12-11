@@ -1,4 +1,4 @@
-import type { CalculatorParams, CalculatorSums, elemId, GrapevineDataStorage, InterpreterResults, Rating, RatingsList, Scorecard, ScorecardData, ScorecardInput, ScorecardsDataStorage, scoreindex, timestamp, userId, WorldviewCalculation, WorldviewKeys, WorldviewSettings } from "../types"
+import type { CalculatorParams, CalculatorSums, elemId, GrapevineData, InterpreterResults, protocol, Rating, RatingsList, Scorecard, ScorecardData, ScorecardMeta, ScorecardsRecord, scoreindex, timestamp, userId, WorldviewCalculation, WorldviewKeys, WorldviewSettings } from "../types"
 
 let keys : Required<WorldviewKeys>
 let calculator : Required<CalculatorParams>
@@ -56,7 +56,7 @@ export function calculate ( R : RatingsList, K : Required<WorldviewKeys>, W : Wo
   //   throw('GrapeRank : Calculator : missing oberver calculator')
 
   // iterate
-  calctimestamp = Date.now().valueOf()
+  calctimestamp = Date.now()
   let calculated = 0
   let iteration = 0
   while(calculated < calculators.size){
@@ -122,30 +122,32 @@ function iterate(iteration : number) : number {
 
 }
 
-function outputGrapevineData() : GrapevineDataStorage {
+function outputGrapevineData() : GrapevineData {
   // TODO set expires from calculator params at time of calculation 
   let expires = false
-  let summary : Map<scoreindex, number> = new Map()
+  let summary : Record<scoreindex, number>  = new Scoreindex()
   calculators.forEach((calculator) => {
     if(calculator.output) {
       let scoreindex = Math.round(calculator.output[1].score * 100) as scoreindex
-      let scorecount = ( summary.get(scoreindex) || 0 ) + 1
-      summary.set(scoreindex, scorecount)
+      let scorecount = ( summary[scoreindex] || 0 ) + 1
+      summary[scoreindex] = scorecount
     }
   })
-  return { summary : [...summary.entries()], expires}
+  return { summary, expires}
 }
 
-function outputScorecardsData() : ScorecardsDataStorage {
-  let scorecards : Array<[elemId, Required<ScorecardData>]> = []
+function outputScorecardsData() : ScorecardsRecord {
+  let scorecards : Record<elemId, Required<ScorecardData>> = {}
   calculators.forEach((calculator) => {
-    if(calculator.output) {
-      scorecards.push(calculator.output)
+    let output = calculator.output
+    if(output) {
+      scorecards[output[0]] = output[1]
     }
   })
-  return scorecards.sort((a ,b )=>{
-    return  b[1].score - a[1].score ||  b[1].input['nostr-follows']?.count - a[1].input['nostr-follows']?.count 
-  })
+  // return scorecards.sort((a ,b )=>{
+  //   return  b[1].score - a[1].score ||  b[1].input['nostr-follows']?.count - a[1].input['nostr-follows']?.count 
+  // })
+  return scorecards
 }
 
 
@@ -209,23 +211,24 @@ class ScorecardCalculator {
     this._sums.weights += weight
     this._sums.products += weight * rating.score
 
-    // add input data from ratings
-    this._input = { 
-      // count = number of ratings used to calculate this scorecard, grouped by protocol name
-      count : 
-        {
-          ...this._input?.count,
-          [rating.protocol] : (this._input?.count[rating.protocol] || 0) + 1
-        },
+    // get the metadata entry for this protocol
+    let protocolmeta = this._meta.get(rating.protocol)
+    // create new metadata entry for this protocol, using existing values as available
+    protocolmeta = { 
+      index : rating.index,
       // dos = the minimum nonzero iteration number for ratings used to calculate this scorecard 
       dos : 
-        rating.iteration && this._input?.dos && rating.iteration < this._input.dos ? 
-          rating.iteration : this._input?.dos || rating.iteration,
-      // weights = sum of weights for ALL ratings used to calculate this scorecard
-      weights : 
-        this._sums.weights
+        rating.iteration && protocolmeta?.dos && rating.iteration < protocolmeta.dos ? 
+          rating.iteration : protocolmeta?.dos || rating.iteration,
+      // weighted = weighted sum of protocol ratings calculated in this scorecard
+      weighted : weight + (protocolmeta?.weighted || 0),
+      // numRatings = number of protocol ratings for this subject
+      numRatings : 1 + (protocolmeta?.numRatings || 0),
+      // numRatedBy = number of protocol ratings for observer by this subject
+      numRatedBy : (rating.ratee == keys.observer ? 1 : 0) + (protocolmeta?.numRatedBy || 0)
     }
-
+    // assure that the metadata entry is updated for this protocol, in case it was undefined before.
+    this._meta.set(rating.protocol, protocolmeta)
   }
 
   // STEP C : calculate influence
@@ -240,6 +243,11 @@ class ScorecardCalculator {
     // calculate score
     let confidence = 0
     let score = 0
+    let meta : Record<protocol,ScorecardMeta> = {}
+
+    // convert metadata map to pojo
+    this._meta.forEach((scorecardmeta,protocol) => meta[protocol] = scorecardmeta )
+
     // If weights == 0 then confidence and score will also be 0
     if(this._sums.weights > 0){
       // STEP D : calculate confidence
@@ -254,19 +262,16 @@ class ScorecardCalculator {
 
     // zero the sums
     this._sums  = {...zerosums};
+
     // output the scorecard
-    this._data = {
-      confidence, 
-      score,
-      input : this._input,
-    }
+    this._data = { confidence, score, meta }
     return this.calculated
   }
 
   private _calculated : boolean | undefined
   private _subject : elemId 
   private _data : Required<ScorecardData> 
-  private _input : ScorecardInput
+  private _meta : Map<protocol, ScorecardMeta> = new Map()
   // TODO refactor this._sums as this._input in the format of scorecard.input
   private _sums : CalculatorSums = {...zerosums}
   private get _average(){ 
@@ -353,4 +358,111 @@ function getRating(rater:userId, ratings:RatingsList = []) : Rating | undefined{
   for(let r in ratings){
     if(rater == ratings[r].rater) return ratings[r]
   }
+}
+
+class Scoreindex implements Record<scoreindex, number> {
+  constructor(){
+    for(let i = 0; i <= 100; i++) { this[i] = 0; }
+  }
+  0: number
+  2: number
+  1: number
+  10: number
+  100: number
+  3: number
+  4: number
+  5: number
+  6: number
+  7: number
+  8: number
+  9: number
+  11: number
+  12: number
+  13: number
+  14: number
+  15: number
+  16: number
+  17: number
+  18: number
+  19: number
+  20: number
+  21: number
+  22: number
+  23: number
+  24: number
+  25: number
+  26: number
+  27: number
+  28: number
+  29: number
+  30: number
+  31: number
+  32: number
+  33: number
+  34: number
+  35: number
+  36: number
+  37: number
+  38: number
+  39: number
+  40: number
+  41: number
+  42: number
+  43: number
+  44: number
+  45: number
+  46: number
+  47: number
+  48: number
+  49: number
+  50: number
+  51: number
+  52: number
+  53: number
+  54: number
+  55: number
+  56: number
+  57: number
+  58: number
+  59: number
+  60: number
+  61: number
+  62: number
+  63: number
+  64: number
+  65: number
+  66: number
+  67: number
+  68: number
+  69: number
+  70: number
+  71: number
+  72: number
+  73: number
+  74: number
+  75: number
+  76: number
+  77: number
+  78: number
+  79: number
+  80: number
+  81: number
+  82: number
+  83: number
+  84: number
+  85: number
+  86: number
+  87: number
+  88: number
+  89: number
+  90: number
+  91: number
+  92: number
+  93: number
+  94: number
+  95: number
+  96: number
+  97: number
+  98: number
+  99: number
 }

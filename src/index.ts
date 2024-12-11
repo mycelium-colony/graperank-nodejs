@@ -1,7 +1,7 @@
 import * as Calculator from "./Calculator";
 import * as Interpreter from "./Interpreter";
 import { StorageApi, StorageFileList, StorageProcessor } from "./Storage";
-import { ApiDataTypes, ApiOperation, ApiRequest, ApiTypeName, ApiTypeOperation, CalculatorParams, EngineRequest, GrapevineDataStorage, GrapevineKeys, ProtocolRequest, Rating, RatingsList, Scorecard, ScorecardKeys, ScorecardsDataStorage, timestamp, userId, WorldviewCalculation, WorldviewDataStorage, WorldviewKeys, WorldviewSettings } from "./types";
+import { ApiDataTypes, ApiOperation, ApiRequest, ApiTypeName, ApiTypeOperation, CalculatorParams, EngineRequest, GrapevineData, GrapevineKeys, ProtocolRequest, Rating, RatingsList, Scorecard, ScorecardKeys, ScorecardsRecord, timestamp, userId, WorldviewCalculation, WorldviewData, WorldviewKeys, WorldviewSettings } from "./types";
 
 
 // const storage = new StorageApi( new StorageProcessor.s3 )
@@ -73,11 +73,11 @@ export class GrapeRank implements ApiOperation {
   // get data(){
   //   if(!this.request.data) return undefined
   //   if(this.type === 'worldview')
-  //     return this.request.data as WorldviewDataStorage
+  //     return this.request.data as WorldviewData
   //   if(this.type === 'grapevine')
-  //     return this.request.data as GrapevineDataStorage
+  //     return this.request.data as GrapevineData
   //   if(this.type === 'scorecards')
-  //     return this.request.data as ScorecardsDataStorage
+  //     return this.request.data as ScorecardsRecord
   // }
 
   constructor(
@@ -100,10 +100,10 @@ export class GrapeRank implements ApiOperation {
     if(!type) return undefined // TODO log error
 
     switch(type){
-      // case 'worldview' :
-      //   return GrapeRank.storage.worldview.list(this.request.keys as WorldviewKeys)
-      // case 'grapevine' :
-      //   return GrapeRank.storage.grapevine.list(this.request.keys as GrapevineKeys)
+      case 'worldview' :
+        return GrapeRank.storage.worldview.list(this.request.keys as WorldviewKeys)
+      case 'grapevine' :
+        return GrapeRank.storage.grapevine.list(this.request.keys as GrapevineKeys)
       case 'scorecards' :
         return GrapeRank.storage.scorecards.list(this.request.keys as ScorecardKeys)
     }
@@ -113,18 +113,17 @@ export class GrapeRank implements ApiOperation {
   async get(type? : ApiTypeName ) : Promise<ApiDataTypes | undefined> {
     type = type || this.type
     if(!type) return undefined // TODO log error
+    let data : ScorecardsRecord | GrapevineData | WorldviewData | undefined
 
     switch(type){ 
       // TODO handle for worldview and grapevine requests
-      // case 'worldview' :
-      //   // GET worldview from storage
-      //   let worldview = await GrapeRank.storage.worldview.get(this.request.keys as WorldviewKeys)
-      //   if(worldview) return [worldview]
-
+      case 'worldview' :
+        // GET worldview from storage
+        data = await GrapeRank.storage.worldview.get(this.request.keys as WorldviewKeys)
+        break
       case 'grapevine' :
       case 'scorecards' :
         // GET grapevine from storage
-        let data : ScorecardsDataStorage | GrapevineDataStorage | undefined
         if(!this.request.keys.timestamp && !this.recalculate)
           data = await GrapeRank.storage[type].get(this.request.keys as GrapevineKeys)
         // calculate (and store) grapevine if NOT retrieved from storage
@@ -133,8 +132,8 @@ export class GrapeRank implements ApiOperation {
           if(!calculation) return undefined // TODO log error
           data = calculation[type]
         }
-        return data
     }
+    return data
   }
 
   async put(){
@@ -149,7 +148,7 @@ export class GrapeRank implements ApiOperation {
   }
 
   // calculate and store a new grapevine
-  private async generate(keys? : Required<WorldviewKeys>, data? : WorldviewDataStorage, iteration? : number) : Promise<WorldviewCalculation | undefined>{
+  private async generate(keys? : Required<WorldviewKeys>, data? : WorldviewData, iteration? : number) : Promise<WorldviewCalculation | undefined>{
     // validate keys
     if(!keys && this.request.keys.observer && this.request.keys.context) {
       keys = this.request.keys as Required<WorldviewKeys>
@@ -158,15 +157,13 @@ export class GrapeRank implements ApiOperation {
 
     // get worldview config
     if(!data){
-      // get demo worldview regardless of keys passed
-      data = worldviewpresets[DEMO_CONTEXT]
-      // TODO get worldview from storage
-      // data = await GrapeRank.storage.worldview.get(keys)
+      // get worldview data from Storage (or from preset ... as determined by Storage component)
+      data = await GrapeRank.storage.worldview.get(keys)
 
     }
     if(!data) return undefined // TODO log error
     
-    let ratercards : ScorecardsDataStorage | undefined
+    let ratercards : ScorecardsRecord | undefined
 
     // TODO handle case for `input` worldview
     // get ratercards from worldview input 
@@ -227,52 +224,11 @@ export class GrapeRank implements ApiOperation {
   //   Storage.
   // }
 
-  private getRaters(scorecards : ScorecardsDataStorage = []) : userId[] | undefined {
+  private getRaters(scorecards : ScorecardsRecord = {}) : userId[] | undefined {
     const raters : userId[] = []
-    scorecards.forEach((entry)=>{
-      raters.push(entry[0])
-    })
+    for(let userid in scorecards) {
+      raters.push(userid)
+    }
     return raters.length ? raters : undefined
   }
-}
-
-
-export const DEMO_CONTEXT = "grapevine-web-of-trust-demo"
-export const DEFAULT_CONTEXT= "grapevine-web-of-trust"
-const worldviewpresets : Record<string,WorldviewSettings> = {
-
-  [DEMO_CONTEXT] : {
-    interpreters : [
-      {
-        protocol : "nostr-follows",
-        iterate : 6
-      },
-      {
-        protocol : "nostr-mutes",
-      },
-      {
-        protocol : "nostr-reports",
-      }
-    ],
-    calculator : undefined,
-    input : undefined
-  },
-
-  [DEFAULT_CONTEXT] : {
-    interpreters : [
-      {
-        protocol : "nostr-follows",
-        iterate : 6
-      },
-      {
-        protocol : "nostr-mutes",
-      },
-      {
-        protocol : "nostr-reports",
-      }
-    ],
-    calculator : undefined,
-    input : undefined
-  }
-
 }

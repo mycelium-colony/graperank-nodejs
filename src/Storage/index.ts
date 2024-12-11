@@ -1,4 +1,4 @@
-import { GrapevineDataStorage, WorldviewDataStorage, GrapevineKeys, WorldviewKeys, ScorecardKeys, ApiKeysTypes, ScorecardData, ApiOperation, ApiTypeOperation, ScorecardsDataStorage, ApiTypeName } from "../types"
+import { GrapevineData, WorldviewData, GrapevineKeys, WorldviewKeys, ScorecardKeys, ApiKeysTypes, ScorecardData, ApiOperation, ApiTypeOperation, ScorecardsRecord, ApiTypeName, WorldviewSettings, DEMO_CONTEXT, DEFAULT_CONTEXT, Grapevine } from "../types"
 import { s3Processor } from "./Processors/s3"
 
 
@@ -41,10 +41,10 @@ export class StorageApi implements Required<StorageDataOperations> {
     },
 
     // store the worldview settings event for calculating a grapevine
-    async put(keys : Required<WorldviewKeys>, data : WorldviewDataStorage){ 
+    async put(keys : Required<WorldviewKeys>, data : WorldviewData){ 
       // TODO verify the worldview signature
       // remove calculated from worldview data
-      data.calculated = undefined
+      data.grapevines = undefined
       // send to processor
       if(!!StorageApi.processor.worldview && StorageApi.processor.worldview.put)
         return await StorageApi.processor.worldview.put(keys, data)
@@ -52,23 +52,27 @@ export class StorageApi implements Required<StorageDataOperations> {
     },
 
     // retrieve the worldview settings event for calculating a grapevine
-    async get(keys : WorldviewKeys) {
-      if(!keys.context) return undefined
-      let worldview : WorldviewDataStorage | undefined
+    async get(keys: WorldviewKeys) {
+      // set default context if none provided
+      if(!keys.context) keys.context = DEFAULT_CONTEXT
+      let worldview : WorldviewData | undefined
+      // get worldview data from preset
+      if(WORLDVIEW_PRESETS[keys.context]) 
+        worldview = WORLDVIEW_PRESETS[keys.context]
       // get Worldview data from processor
-      if(StorageApi.processor.worldview) 
+      if(!worldview && StorageApi.processor.worldview) 
         worldview = await StorageApi.processor.worldview.get(keys)
       // get list of calculated Grapevines from processor
-      if(worldview) await getWorldviewCalculated(keys as Required<WorldviewKeys>, worldview)
+      if(worldview) worldview.grapevines = await getWorldviewGrapevines(keys as Required<WorldviewKeys>)
       return worldview
     },
 
     // retrieve a collection of worldviews
-    // async query (match : (data: Partial<WorldviewDataStorage>) => boolean | undefined) : Promise<WorldviewDataStorage[] | undefined> {
-    //   let matches : WorldviewDataStorage[] | undefined
+    // async query (match : (data: Partial<WorldviewData>) => boolean | undefined) : Promise<WorldviewData[] | undefined> {
+    //   let matches : WorldviewData[] | undefined
     //   // proccess queries here and call proccessor.worldview.get() for each result?
     //   if(StorageApi.processor.worldview?.query) matches = await StorageApi.processor.worldview.query(match)
-    //   if(matches) matches.forEach(async (worldview)=>{  await getWorldviewCalculated(worldview) })
+    //   if(matches) matches.forEach(async (worldview)=>{  await getWorldviewGrapevines(worldview) })
     //   return matches    
     // },
   }
@@ -82,7 +86,7 @@ export class StorageApi implements Required<StorageDataOperations> {
     },
 
     // store the metadata and summary of a grapevine calculation 
-    async put(keys : Required<GrapevineKeys>, data : GrapevineDataStorage) {
+    async put(keys : Required<GrapevineKeys>, data : GrapevineData) {
       // TODO validate worldview signature before writing results
       // TODO require `timestamp` and deny overwriting to the same timestamp
       // send to processor
@@ -91,7 +95,7 @@ export class StorageApi implements Required<StorageDataOperations> {
       return false
     },
 
-    // retrieve GrapevineCalculation and GrapevineScores (not scorecards) as Grapevine
+    // retrieve Grapevine summary and metadata as GrapevineData
     async get(keys : GrapevineKeys) {
       // get latest timestamp from filelist if none provided
       if(!keys.timestamp && StorageApi.processor.grapevine) {
@@ -100,8 +104,8 @@ export class StorageApi implements Required<StorageDataOperations> {
       }
       if(keys.timestamp){
         // get grapevine from processor
-        console.log('GrapeRank : StorageApi : calling processor.scorecards.get() with : ',keys)
-        if(keys.timestamp && StorageApi.processor.grapevine) 
+        console.log('GrapeRank : StorageApi : calling processor.grapevine.get() with : ',keys)
+        if(StorageApi.processor.grapevine) 
           return await StorageApi.processor.grapevine.get(keys)
       }
       return undefined
@@ -142,7 +146,7 @@ export class StorageApi implements Required<StorageDataOperations> {
       return undefined
     },
     // put grapevine scorecards
-    async put(keys : Required<GrapevineKeys>, data : ScorecardsDataStorage, overwrite? : boolean) {
+    async put(keys : Required<GrapevineKeys>, data : ScorecardsRecord, overwrite? : boolean) {
       if(StorageApi.processor.scorecards?.put) 
         return await StorageApi.processor.scorecards.put(keys, data)
       return false
@@ -201,33 +205,38 @@ export interface StorageOperations<KeysType , DataType> extends ApiOperation  {
 export interface StorageDataOperations extends ApiTypeOperation {
 // store and retrieve worldview settings as user signed events 
 // for calculating a grapevine
-worldview? : StorageOperations<WorldviewKeys, WorldviewDataStorage>,
+worldview? : StorageOperations<WorldviewKeys, WorldviewData>,
 
 // store and retrieve results and metadata from grapevine calculations
 // unsigned grapevine data is ONLY stored after verifying worldview event signatures 
-grapevine? : StorageOperations<GrapevineKeys, GrapevineDataStorage>,
+grapevine? : StorageOperations<GrapevineKeys, GrapevineData>,
 
 // retrieve scores associated with a grapevine. PUT is not permitted.
 // scores? : StorageType<ApiKeysTypes, GrapevineScoresStorage>,
 
 // query to return FULL scorecards from ANY grapevine
-scorecards? : StorageOperations<GrapevineKeys, ScorecardsDataStorage>
+scorecards? : StorageOperations<GrapevineKeys, ScorecardsRecord>
 }
 
 
-async function getWorldviewCalculated(worldviewkeys : Required<WorldviewKeys>, worldview : WorldviewDataStorage) : Promise<void> {
-  // get a list of timestamp identifyers for every calculated grapevine
-  let timestamps = await getCalculationTimestamps('grapevine', worldviewkeys)
+async function getWorldviewGrapevines(worldviewkeys : Required<WorldviewKeys>, limit = 0) : Promise<Grapevine[]> {
+  let grapevines : Grapevine[] = []
   if(StorageApi.controller.grapevine?.get) {
-    timestamps.forEach(async (timestamp)=>{
-      let grapevinedata : GrapevineDataStorage | undefined
+    // get a list of timestamp identifiers for every calculated grapevine
+    let timestamps = await getCalculationTimestamps('grapevine', worldviewkeys)
+    // get individual grapevines up to limit
+    // TODO apply limit when retrieving timestamps from Storage.list()
+    for(let i in timestamps){
+      if(limit && i as unknown as number > limit) break
+      let timestamp = timestamps[i.toString()]
+      let grapevinedata : GrapevineData | undefined
       // get data for each Grapevine from processor
-      grapevinedata = await StorageApi.controller.grapevine?.get({...worldviewkeys,timestamp})
-      // append timestamp and grapevine data to worldview.calculated
-      if(grapevinedata) worldview.calculated?.push([timestamp, grapevinedata])
-    })
+      if(timestamp) grapevinedata = await StorageApi.controller.grapevine.get({...worldviewkeys,timestamp})
+      // append grapevine keys and data to worldview.grapevines
+      if(grapevinedata) grapevines.push({...worldviewkeys, timestamp, ...grapevinedata})
+    }
   }
-  return
+  return grapevines
 }
 
 const timestampregex = /\d{9,}/g
@@ -267,3 +276,43 @@ async function getCalculationTimestamps(type: 'grapevine' | 'scorecards', keys :
 //   }
 //   return scoreindexlist
 // }
+
+
+
+const WORLDVIEW_PRESETS : Record<string,WorldviewSettings> = {
+
+  [DEMO_CONTEXT] : {
+    interpreters : [
+      {
+        protocol : "nostr-follows",
+        iterate : 6
+      },
+      {
+        protocol : "nostr-mutes",
+      },
+      {
+        protocol : "nostr-reports",
+      }
+    ],
+    calculator : undefined,
+    input : undefined
+  },
+
+  [DEFAULT_CONTEXT] : {
+    interpreters : [
+      {
+        protocol : "nostr-follows",
+        iterate : 6
+      },
+      {
+        protocol : "nostr-mutes",
+      },
+      {
+        protocol : "nostr-reports",
+      }
+    ],
+    calculator : undefined,
+    input : undefined
+  }
+
+}
