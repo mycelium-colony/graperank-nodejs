@@ -57,12 +57,7 @@ export function calculate ( R : RatingsList, K : Required<WorldviewKeys>, W : Wo
 
   // iterate
   calctimestamp = Date.now()
-  let calculated = 0
-  let iteration = 0
-  while(calculated < calculators.size){
-    iteration ++
-    calculated = iterate(iteration)
-  }
+  let calculated = iterate()
 
   // output
   const calculationdata : WorldviewCalculation = {
@@ -76,49 +71,75 @@ export function calculate ( R : RatingsList, K : Required<WorldviewKeys>, W : Wo
 }
 
 
-let totalcalculated = 0
 // returns number of scorecards calculated
-function iterate(iteration : number) : number {
-  let thistotalcalculated = 0
-  console.log("------------ BEGIN ITERATION : ", iteration, " --------------------")
-  
-  // STEP B : calculate sums
-  // Add rater's rating to the sum of weights & products for the ratee scorecard
-  for(let r in ratings){
-    let calculator = calculators.get(ratings[r].ratee)
-    let ratercard = calculators.get(ratings[r].rater as string)?.scorecard
-    if(calculator) {
-      calculator.sum( ratings[r], ratercard)
+function iterate() : number {
+  let calculating : number = 0
+  let calculated : number = 0
+  let notcalculated : string[]
+  let notcalculatedwarning : number = 0
+  let prevcalculating = 0
+  let prevcalculated = 0
+  let iteration = 0
+  let iterationscores : number[] = []
+
+  while(calculated < calculators.size){
+    iteration ++
+    prevcalculating = calculating
+    prevcalculated = calculated
+    calculating = 0
+    calculated = 0
+    notcalculated = []
+    console.log("------------ BEGIN ITERATION : ", iteration, " --------------------")
+    
+    // STEP B : calculate sums
+    // Add rater's rating to the sum of weights & products for the ratee scorecard
+    for(let r in ratings){
+      let calculator = calculators.get(ratings[r].ratee)
+      let ratercard = calculators.get(ratings[r].rater as string)?.scorecard
+      if(calculator) {
+        calculator.sum( ratings[r], ratercard)
+      }
     }
-  }
 
-  // STEP C : calculate influence
-  // calculate final influence and confidence for each ratee scorecard
-  // call calculate again if calculation is NOT complete
-  calculators.forEach( calculator => { 
-    if( !calculator.calculated ){
-      calculator.calculate()
-    }else{
-      thistotalcalculated ++
+    // STEP C : calculate influence
+    // calculate final influence and confidence for each ratee scorecard
+    // call calculate again if calculation is NOT complete
+    calculators.forEach( (calculator, rater) => { 
+      if( !calculator.calculated ){
+        calculator.calculate()
+        calculating ++
+      }
+      if(calculator.calculated){
+        calculated ++
+      }else{
+        notcalculated.push(rater)
+      }
+    }) 
+
+    // LOG iteration
+    iterationscores = logScoresForIteration()
+
+    console.log("TOTAL number scorecards : ", calculators.size )  
+    console.log("TOTAL scorecards calculating this iteration : ", calculating)
+    console.log("TOTAL scorecards calculated : ", calculated)
+    // halt iterator if needed
+    if( notcalculated.length ){
+      if(calculated == prevcalculated && calculating == prevcalculating ){
+        notcalculatedwarning ++
+        console.log("WARNING ",notcalculatedwarning," : scores did not change for ", calculating," scorecards in calculate()")
+        if(notcalculatedwarning > 4) {
+          console.log("HALTING iterator : due to unchanging scores for the following raters : ", notcalculated)
+          calculated = calculators.size
+        }
+      }
+      if(iteration > 100){
+        console.log("HALTING iterator : exeded MAX 100 iterations in calculate() ")
+        calculated = calculators.size
+      }
     }
-  }) 
-
-  // LOG iteration
-  logScoresForIteration()
-  console.log("TOTAL number scorecards : ", calculators.size )  
-  console.log("TOTAL scorecards calculated : ", thistotalcalculated)
-
-  if(iteration > 10 && thistotalcalculated == totalcalculated){
-    console.log("HALTING iterator : no new scores calculated")
-    thistotalcalculated = calculators.size
+    console.log("------------ END ITERATION : ", iteration, " --------------------")
   }
-  if(iteration > 100){
-    console.log("HALTING iterator : exeded MAX 100 iterations in calculate ")
-    thistotalcalculated = calculators.size
-  }
-
-  console.log("------------ END ITERATION : ", iteration, " --------------------")
-  return thistotalcalculated
+  return calculated
 
 }
 
@@ -218,8 +239,8 @@ class ScorecardCalculator {
       index : rating.index,
       // dos = the minimum nonzero iteration number for ratings used to calculate this scorecard 
       dos : 
-        rating.iteration && protocolmeta?.dos && rating.iteration < protocolmeta.dos ? 
-          rating.iteration : protocolmeta?.dos || rating.iteration,
+        rating.dos && protocolmeta?.dos && rating.dos < protocolmeta.dos ? 
+          rating.dos : protocolmeta?.dos || rating.dos,
       // weighted = weighted sum of protocol ratings calculated in this scorecard
       weighted : weight + (protocolmeta?.weighted || 0),
       // numRatings = number of protocol ratings for this subject
@@ -229,6 +250,10 @@ class ScorecardCalculator {
     }
     // assure that the metadata entry is updated for this protocol, in case it was undefined before.
     this._meta.set(rating.protocol, protocolmeta)
+
+    // DEBUG
+    if(this._subject == '2b6ffc569838d4d91ef5a4c0f86a370873e1cb9adbc0da0ed4e85370f5f93236')
+      console.log('DEBUG DOS : CALCULATOR sum() ', this._sums, this._meta)
   }
 
   // STEP C : calculate influence
@@ -292,7 +317,7 @@ class ScorecardCalculator {
 
 
 // LOG iteration
-function logScoresForIteration(){
+function logScoresForIteration() : number[] {
 
     let scorecards : Scorecard[] = [] 
     let increment  = .1
@@ -311,6 +336,7 @@ function logScoresForIteration(){
       v = ((i as unknown as number) * increment).toPrecision(2)
       console.log("number of cards having scores from "+ ov +" to " +v+ " = ", scores[i])
     }
+    return scores
 }
 
 
