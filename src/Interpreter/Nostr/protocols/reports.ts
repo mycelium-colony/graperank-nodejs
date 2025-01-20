@@ -28,8 +28,7 @@ export const reports = new NostrProtocol<ReportsParams>({
     impersonation : 0, // someone pretending to be someone else
     other : 0, // for reports that don't fit in the above categories
   },
-
-  interpret : (events : Set<NostrEvent>, params : ReportsParams) => {
-    return applyRatingsByTag(events,params, 'P', 1, 2)
+  interpret : (fetchedIndex? : number) => {
+    return applyRatingsByTag(reports, fetchedIndex, 'P', 1, 2)
   }
 })

@@ -3,8 +3,8 @@ import { Event as NostrEvent} from 'nostr-tools/core'
 import { Filter as NostrFilter} from 'nostr-tools/filter'
 import { SimplePool } from 'nostr-tools/pool'
 import { useWebSocketImplementation } from 'nostr-tools/pool'
-import {mergeBigArrays, sliceBigArray} from "../../utils.ts"
-import { PartialRatingsList, ProtocolParams, Rating, userId } from "../../types.ts"
+import { mergeBigArrays, sliceBigArray} from "../../utils.ts"
+import { elemId, ProtocolParams, ProtocolRequest, Rating, RatingData, RatingsMap, userId } from "../../types.ts"
 import WebSocket from 'ws'
 import { npubEncode } from "nostr-tools/nip19"
 useWebSocketImplementation(WebSocket)
@@ -31,8 +31,8 @@ type  NostrProtocolConfig<ParamsType extends ProtocolParams> = {
   kinds : number[],
   params : ParamsType,
   interpret? : 
-    (events:Set<NostrEvent>, params : ParamsType) 
-    => Promise<PartialRatingsList>,
+    (fetchedIndex : number) 
+    => Promise<RatingsMap>,
   validate? : 
     (events : Set<NostrEvent>, authors : userId[], previous? : Set<NostrEvent>) 
     => boolean | userId[],
@@ -40,157 +40,194 @@ type  NostrProtocolConfig<ParamsType extends ProtocolParams> = {
 
 export class NostrProtocol<ParamsType extends ProtocolParams> implements InterpretationProtocol {
   readonly kinds : number[]
-  readonly params : ParamsType
-  dataset : Set<NostrEvent> = new Set()
-  interpret : (params : ParamsType) => Promise<PartialRatingsList>
+  request : ProtocolRequest
+  private _params : ParamsType
+  get params(){ return {...this._params, ...this.request.params}}
+  fetched : Set<NostrEvent>[] = []
+  interpreted : RatingsMap = new Map()
+  interpret : (this : InterpretationProtocol, fetchedIndex? : number) => Promise<RatingsMap>
   validate? : 
   (events : Set<NostrEvent>, authors : userId[], previous? : Set<NostrEvent>) 
   => boolean | userId[]
 
   constructor(config: NostrProtocolConfig<ParamsType>){
     this.kinds = config.kinds
-    this.params = config.params
+    this._params = config.params
     this.validate = config.validate
+    this.interpret = async (fetchedIndex? : number) => {
+      if(!this.fetched.length) throw('GrapeRank : '+this.request.protocol+' protocol interpret() : ERROR : NO EVENTS FETCHED PRIOR TO INTERPRET')
+      // use the set of fetched events at fetchedIndex or LAST index
+      fetchedIndex = fetchedIndex || this.fetched.length - 1
+      let newratings : RatingsMap 
+      console.log("GrapeRank : ",this.request.protocol," protocol : interptreting " ,this.fetched[fetchedIndex].size, " events fetched in iteration ", fetchedIndex)
+      // interpret newratings via defined callback or default
+      if(config.interpret) {
+        newratings = await config.interpret(fetchedIndex) 
+      }else{
+        newratings = await applyRatingsByTag(this, fetchedIndex)
+      }
 
-    this.interpret = async (params:ParamsType) => {
-      console.log("GrapeRank : nostr protocol : interptreting " +this.dataset.size+ " events")
-      params = {...this.params, ...params}
-      let ratings = 
-        config.interpret ? await config.interpret(this.dataset, params) :
-        await applyRatingsByTag(this.dataset, params)
-      console.log("GrapeRank : nostr protocol : interptreting "+ratings.length+" ratings")
-      return ratings
+      // merge newratings into this.interpreted
+      let numratingsmerged = 0
+      let numraterratings = 0
+      let numratingsduplicate = 0
+      newratings.forEach((rateemap,rater)=>{ 
+        let raterratings = this.interpreted.get(rater)
+        if(raterratings) {
+          numraterratings = raterratings.size
+          rateemap.forEach((ratingdata,ratee)=>{
+            raterratings.set(ratee, ratingdata)
+          })
+          numratingsmerged = numratingsmerged + (raterratings.size - numraterratings)
+          numratingsduplicate = numratingsduplicate + (rateemap.size - (raterratings.size - numraterratings))
+        }else{
+          numratingsmerged = numratingsmerged + rateemap.size
+          this.interpreted.set(rater, rateemap) 
+        }
+      })
+
+      console.log("GrapeRank : ",this.request.protocol," protocol : merged iteration ",fetchedIndex," into total interpreted : ", numratingsmerged ," new ratings and ",numratingsduplicate," duplicate ratings from ",newratings.size," authors")
+
+      return newratings
     }
   }
 
   // breaks up a large raters list into multiple authors lists 
   // suitable for relay requests, and sends them all in parrallel
   // returns a single promise that is resolved when all fetches are complete.
-  async fetchData(raters : Set<userId>, filter?: NostrFilter) : Promise<void> {
+  async fetchData(authors? : Set<userId>) : Promise<number> {
+    authors = authors || new Set(this.request.authors)
+    // authorslists is authors broken into an array of list, 
+    // where each list is maximum size allowed for relay requests
+    const authorslists : userId[][] = authors.size > maxauthors ? 
+      await sliceBigArray([...authors], maxauthors) : [[...authors]]
+    // fetchedSet is where each promise will add newly fetched events
+    const fetchedSet : Set<NostrEvent> = new Set()
+    const promises : Promise<void>[] = []
+    let promise : Promise<void>
 
-    const authors : userId[][] = raters.size > maxauthors ? 
-      await sliceBigArray([...raters], maxauthors) : [[...raters]]
+    console.log("GrapeRank : nostr protocol : fetching events in ",authorslists.length, " requests for ",authors.size," raters")
 
-    const promises : Promise<Set<NostrEvent>>[] = []
-    let promise : Promise<Set<NostrEvent>>
-
-    console.log("GrapeRank : nostr protocol : fetching events in ",authors.length, " requests for ",raters.size," raters")
-
-    for(let a in authors){
+    for(let a in authorslists){
       let fetchfilter : NostrFilter = {
-        ...filter, 
-        authors : authors[a] as string[],
+        ...this.request.filter, 
+        authors : authorslists[a] as string[],
         kinds : this.kinds,
       }
-      promise = this.fetchEventsPromise(fetchfilter, a as unknown as number)
+      promise = this.fetchEventsPromise(fetchfilter, fetchedSet, a as unknown as number)
       promises.push(promise)
     }
-
+    // wait for all promises to resolve
     await Promise.all(promises)
+    console.log("GrapeRank : nostr protocol : fetching complete with ", fetchedSet.size, " events ")
 
-    console.log("GrapeRank : nostr protocol : fetching complete with ", this.dataset.size, " records ")
+    // add fetchedSet to this.fetched array of event sets, 
+    // and return the new index of fetchedSet within this.fetched
+    return this.fetched.push(fetchedSet) -1
   }
 
   // An iterative function ... 
   // possibly calls itself again if validation fails
   // returns a single promise with possibly nested promises
-  private async fetchEventsPromise(filter: NostrFilter, iteration = 0, previous? : Set<NostrEvent>) : Promise<Set<NostrEvent>> {
+  private async fetchEventsPromise(filter: NostrFilter, fetchedSet : Set<NostrEvent>, iteration = 0) : Promise<void> {
     if(!filter.authors) 
       return new Promise((resolve,reject)=> reject("No authors provided"))
-
-    console.log("GrapeRank : nostr protocol : fetching events in request ",iteration, " for ",filter.authors.length, " raters")
-
-    let fetchpromise = fetchEvents(filter)
-      fetchpromise.then(async (events)=>{
-        let validation = this.validate ? this.validate(events, filter.authors as string[], previous) : true
-        let totaleventssize : number
+    console.log("GrapeRank : nostr protocol : fetching events in request ",iteration, " for ",filter.authors?.length, " raters")
+    return new Promise((resolve)=>{
+      fetchEvents(filter).then(async (newFetchedSet)=>{
+        let validation = this.validate ? this.validate(newFetchedSet, filter.authors as string[], fetchedSet) : true
         try{
 
           // FALSE validation will log error
           if(validation === false ) {
-            throw('validaiton failed')
+            throw('events validaiton failed')
           }
 
-          // TRUE validation will add events to dataset
-          events.forEach((event) => this.dataset.add(event))
+          // TRUE validation will add events to fetchedSet
           if(validation === true){ 
-            totaleventssize = previous ? (previous.size + events.size ): events.size
-            throw("completed with " + totaleventssize + " events")
+            // fetchedSet = new Set([...fetchedSet, ...newFetchedSet])
+            newFetchedSet.forEach((event)=>{ fetchedSet.add(event) })
+            throw("fetched " + newFetchedSet.size + " new events, for total of "+ fetchedSet.size)
           }
 
           // otherwise try request again with reduced authors list
           console.log("GrapeRank : nostr protocol : fetch request ",iteration," : requesting again")
           await this.fetchEventsPromise(
-            {...filter, authors : validation as string[]}, 
-            iteration, events )
+            {...filter, authors : validation as string[]}, fetchedSet,
+            iteration )
 
         }catch(e){
-          console.log("GrapeRank : nostr protocol : fetch request ",iteration," : ", e)
+          console.log("GrapeRank : nostr protocol : fetch request  ",iteration," complete : ", e)
         }
-  
+        resolve()
       }).catch((error)=>{
         console.log("GrapeRank : nostr protocol : ERROR in fetch request ", iteration, error)
       })
-      
-    return fetchpromise
+    })
   }
-  
+
 }
 
 
-export async function  applyRatingsByTag(events : Set<NostrEvent>, params : ProtocolParams, tag = "p", rateeindex = 1, scoreindex? : number) : Promise<PartialRatingsList> {
+export async function  applyRatingsByTag(instance : NostrProtocol<any>, fetchedIndex : number, tag = "p", rateeindex = 1, scoreindex? : number) : Promise<RatingsMap> {
   console.log("GrapeRank : nostr protocol : applyRatingsByTag()")
-  let ratings : PartialRatingsList = [],
-    eventindex : number = 0, 
-    tagsrated : number = 0, 
-    tagskipped : number = 0,
+  const fetchedSet = instance.fetched[fetchedIndex]
+  const newratingsmap : RatingsMap = new Map()
+  let eventindex : number = 0, 
+    totalratings : number = 0, 
+    duplicateratings : number = 0, 
+    rater : userId,
+    ratee : elemId,
     // apply a single score for all ratings, as indicated in params.score
-    defaultscore = params.score as number || 0,
-    defaultconfidence = params.confidence as number || .5
-  // loop through all events to find tags for making new ratings
-  for(const event of events) {
+    defaultscore = instance.params.score as number || 0,
+    defaultconfidence = instance.params.confidence as number || .5
+  // loop through the events of fetchedSet to find tags for making new ratings
+  for(let event of fetchedSet) {
+    rater = event.pubkey
+    const raterratings = new Map<string, RatingData>
     eventindex ++
+    let oldduplicateratings = duplicateratings
     // console.log("GrapeRank : applyRatingsByTag : proccessing event "+eventindex+"/"+numevents+" with " + event.tags.length + " tags")
-    let eventratings : PartialRatingsList = []
+    // let eventratings : PartialRatingsList = []
     // loop through all tags of each event to find the ones to make ratings from
     // TODO iterate if more than 10000 tags in this event
     if(!!event.tags && event.tags.length < 10000){
-      tagsrated = 0
       for(let t in event.tags){
-        tagskipped = 0
+        // `rateeindex` argument determines the tag index from which to get the ID of what's been rated
+        ratee = event.tags[t][rateeindex]
+        // skip for this tag if rating already exists for this rater / ratee
+        if(raterratings.has(ratee)) {
+          duplicateratings ++
+          continue
+        }
         // `tag` argument defines what event tag to makes ratings from
         if(event.tags[t][0] == tag){
           // validate pubkey before applying a rating
           if(tag == 'p' && rateeindex == 1 && !validatePubkey(event.tags[t][1])) {
-            // if(!tagskipped) 
-            //   console.log("GrapeRank : nostr protocol : applyRatingsByTag : validating event : ", {kind:event.kind,pubkey:event.pubkey})
-            // console.log("GrapeRank : nostr protocol : applyRatingsByTag : validation failed for 'p' tag : ", event.tags[t])
-            tagskipped ++
-            break
+            continue
           }
-          eventratings.push({ 
+          raterratings.set(ratee, { 
             confidence : defaultconfidence,
             // if `scoreindex` argument has been defined...
             // and if the value of this tag[scoreindex] is a property in params ...
             // then apply a custom score per rating according to the index value in params
-            score : scoreindex ? params[event.tags[t][scoreindex]] as unknown as number : defaultscore,
-            rater : event.pubkey,
-            // `rateeindex` argument determines the tag index from which to get 
-            // the ID of what's been rated
-            ratee : event.tags[t][rateeindex]
+            score : scoreindex ? instance.params[event.tags[t][scoreindex]] as unknown as number : defaultscore,
+            dos : fetchedIndex
           })
-          tagsrated ++
+          totalratings ++
         }
       }
-      // console.log("GrapeRank : applyRatingsByTag : event processed : ", +tagsrated+ " tags rated : ",  +tagskipped+ " tags skipped")
+      console.log("GrapeRank : applyRatingsByTag : event by author proccessed with ", raterratings.size, " new ratings tags and ",  duplicateratings - oldduplicateratings, " ratings already interpreted" )
     }else{
       console.log("GrapeRank : nostr protocol : applyRatingsByTag : event not processed")
     }
     // handle big arrays with care
-    if(eventratings) ratings = await mergeBigArrays(ratings, eventratings, 10000)
+    // if(eventratings) ratings = await mergeBigArrays(ratings, eventratings, 10000)
+    newratingsmap.set(rater,raterratings)
   }
-  console.log("GrapeRank : nostr protocol : applyRatingsByTag : returned ", ratings.length, " ratings")
-  return ratings
+
+  console.log("GrapeRank : nostr protocol : applyRatingsByTag : total interpreted ", totalratings, " new ratings and skipped ",duplicateratings," duplicate ratings for ",newratingsmap.size," authors in iteration ", fetchedIndex)
+  return newratingsmap
 }
 
 

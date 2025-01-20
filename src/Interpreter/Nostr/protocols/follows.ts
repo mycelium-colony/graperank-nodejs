@@ -17,8 +17,8 @@ export const follows = new NostrProtocol<FollowsParams>({
 
   validate : validateEachEventHasAuthor,
 
-  interpret : (events : Set<NostrEvent>, params : FollowsParams) => {
-    return applyRatingsByTag(events, params)
+  interpret : (fetchedIndex : number) => {
+    return applyRatingsByTag(follows, fetchedIndex)
   }
 
 })

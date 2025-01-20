@@ -13,9 +13,7 @@ export const mutes = new NostrProtocol<MutesParams>({
     score : 0,
     confidence : .5
   },
-
-  interpret : (events : Set<NostrEvent>, params : MutesParams) => {
-    return applyRatingsByTag(events,params)
+  interpret : (fetchedIndex? : number) => {
+    return applyRatingsByTag(mutes, fetchedIndex)
   }
-  
 })

@@ -11,7 +11,7 @@ export type userId = string | number
 export type kindId = string | number
 export type elemId = string
 export type context = string
-export type protocol = string // required : [lowercase] allowed : [numbers, hyphen, underscore]
+export type protocol = string // '[source]-[datatype]' ( EXAMPLE : 'nostr-follows' )
 export type timestamp = number
 export type timestring = string
 
@@ -321,20 +321,33 @@ export type JsonSchema = {
  * input for GrapeRank calculations
  */
 // TODO rename `Rating` to `Interpretation` 
+
+// a list of explicit rating objects for API import or export
+// derived from RatingsProtocolMap
 export type RatingsList = Required<Rating>[]
-export type PartialRatingsList = Rating[] 
+export interface Rating extends RatingKeys, RatingData {
+  protocol : protocol // the protocol by which this rating was interpreted
+  index : number, // the order in which this protocol was executed (from entry order in RatingsProtocolMap)
+}
 
+// a map of RatingData provided by interpreter 
+// where each rating is indexed by rater and ratee IDs 
+// to assure no duplicate ratings are interpreted or calculated
+export type RatingsMap = Map<userId, Map<elemId, RatingData>>
+// export type RatingsProtocolMap = Map<protocol, RatingsMap>
 
-export type Rating = {
+export type RatingKeys = {
   // observer? : userId,
   rater : userId,
   ratee : elemId,
-  protocol? : protocol // '[source]-[dataype]' : 'nostr-follows' 
-  index? : number,
-  iteration? : number // minimum nonzero protocol iteration => DOS for this protocol in ratee scorecard
+}
+
+// RatingData is provided by protocol interpreter 
+export type RatingData = {
   confidence : number // 0 - 1
   // TODO rename 'score' to `value`
   score : number // 0 or 1 / percent
+  dos : number // first protocol iteration at which this rating was interpreted
 }
 
 

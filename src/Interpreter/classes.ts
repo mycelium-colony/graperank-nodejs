@@ -4,14 +4,25 @@ import * as types from "../types.ts"
 export interface InterpretationProtocol {
   // outputs JsonDoc formatted schema of allowed params for API documentation of each instance
   readonly schema? : string
-  // default params for interpretation
-  readonly params : types.ProtocolParams
-  // private storage for the data set returned by fetchData()
-  readonly dataset : Set<any>
-  // a callback to fetch data. called by InterpretationAPI
-  fetchData(raters: Set<types.userId>, filter? : object) : Promise<void>
-  // a callback for interpreting data. called by InterpretationAPI
-  interpret(params? : types.ProtocolParams) : Promise<types.PartialRatingsList>
+  // the request object as set by interpret API
+  request : types.ProtocolRequest
+  // params for interpretation (should return merged default and requested params)
+  params : types.ProtocolParams
+  // an array of ALL data sets fetched by this protocol instance, 
+  // each call to fetchData() produces ONE set in `fetched` array
+  // whereby any NEW protocol iteration uses NEW raters from the previous iteration,
+  // every protocol iteration can represent ONE 'degree of separation' from the original raters list
+  readonly fetched : Set<any>[]
+  // a map of ALL UNIQUE ratings indexed by rater and ratee
+  // each call to interperet() method adds additional records to this map 
+  readonly interpreted : types.RatingsMap 
+  // a callback to fetch data. called by Interpreter API, adds a new set to fetched 
+  // returns `fetchedIndex`, the index (dos) of the fetchedSet which was just added
+  fetchData(this : InterpretationProtocol, authors? : Set<types.userId>) : Promise<number>
+  // a callback for interpreting data. called by Interpreter API
+  // use `fetchedIndex` to specify a set of fetched data to interpret
+  // returns the interpreted data ONLY from specified set of fetched (not the entire set of interpteted)
+  interpret(this : InterpretationProtocol, fetchedIndex? : number) : Promise<types.RatingsMap>
 }
 
 /******* DEMO *********
