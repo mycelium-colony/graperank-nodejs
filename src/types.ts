@@ -18,7 +18,7 @@ export type timestring = string
 export type ParamValue = string | number | boolean
 export type ParamsArray = Array<ParamValue> 
 export type ParamsObject = {
-  [k:string] : ParamValue
+  [k:string] : ParamValue | ParamsArray
 }
 
 
@@ -220,11 +220,59 @@ export type ApiOperation = {
   delete? : any
 }
 
-export type ApiTypeOperation = {
+export type ApiProcessor = {
   worldview? : ApiOperation
   grapevine? : ApiOperation
   scorecards? : ApiOperation
 }
+
+// configure the storage engine with backend storage 
+export type StorageConfig = {
+  // provide a string to reference an existing implmentation StorageProcessor
+  // or provide reference to a new StorageProcessor implmentation
+  processor : string | StorageProcessor
+  // provide credentials and other info needed by the storage backend
+  secrets : StorageSecrets
+}
+
+export type StorageSecrets = {}
+export interface s3secrets extends StorageSecrets {
+  region : string,
+  endpoint : string,
+  key : string,
+  secret : string,
+  bucket : string
+}
+
+export type StorageFileList = { list :string[], next?:string } 
+
+export interface StorageOperations<KeysType , DataType> extends ApiOperation  {
+  list? : (keys : KeysType, getall? : boolean) => Promise< StorageFileList | undefined>
+  put? : (keys: Required<KeysType>, data: DataType, overwrite? : boolean) => Promise<boolean>
+  get : (keys: KeysType) => Promise<DataType | undefined>
+  query? : (match : (data: Partial<DataType>) => boolean | undefined) => Promise<DataType[] | undefined>
+  delete? : (keys: Partial<KeysType>, deleteall? : boolean) => Promise<boolean>
+} 
+
+export interface StorageProcessor extends ApiProcessor {
+init : (secrets? : object) => void
+
+// store and retrieve worldview settings as user signed events 
+// for calculating a grapevine
+worldview? : StorageOperations<WorldviewKeys, WorldviewData>,
+
+// store and retrieve results and metadata from grapevine calculations
+// unsigned grapevine data is ONLY stored after verifying worldview event signatures 
+grapevine? : StorageOperations<GrapevineKeys, GrapevineData>,
+
+// retrieve scores associated with a grapevine. PUT is not permitted.
+// scores? : StorageType<ApiKeysTypes, GrapevineScoresStorage>,
+
+// query to return FULL scorecards from ANY grapevine
+scorecards? : StorageOperations<GrapevineKeys, ScorecardsRecord>
+}
+
+
 
 
 export type InterpreterResults = {
@@ -255,9 +303,12 @@ export type ProtocolRequest = {
   // and also a list of new authors from each content or user being rated
   // this will be used as author input for the next iteration.
   iterate? : number,
+  // add filter parameters to the fetch request (applicable filters depend on the protocol)
+  filter? : ParamsObject,
   // initial authors list for fetching content and generating ratings
   // if left blank, observer ID will be used as a single author
-  authors? : userId[] // optional alist of userId
+  authors? : userId[] // optional list of userId
+  //
 }
 
 export type ProtocolParams = {

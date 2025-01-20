@@ -1,4 +1,4 @@
-import { GrapevineData, WorldviewData, GrapevineKeys, WorldviewKeys, ScorecardKeys, ApiKeysTypes, ScorecardData, ApiOperation, ApiTypeOperation, ScorecardsRecord, ApiTypeName, WorldviewSettings, DEMO_CONTEXT, DEFAULT_CONTEXT, Grapevine } from "../types"
+import { GrapevineData, WorldviewData, GrapevineKeys, WorldviewKeys, ScorecardKeys, ApiKeysTypes, ScorecardData, ApiOperation, ApiProcessor, ScorecardsRecord, ApiTypeName, WorldviewSettings, DEMO_CONTEXT, DEFAULT_CONTEXT, Grapevine, StorageProcessor, StorageConfig, StorageSecrets } from "../types"
 import { s3Processor } from "./Processors/s3"
 
 
@@ -14,21 +14,29 @@ import { s3Processor } from "./Processors/s3"
 // // query all scorecards calculated for an observer and a subject
 // s3storage.scorecards.query((s) => s.observer == 'mypubkey' && s.subject == 'myfriendspubkey')
 
-export namespace StorageProcessor {
+export namespace StorageProcessors {
   export const s3 = s3Processor
 }
 
 /**
  * Storage and retrieval of calculator data
  */
-export class StorageApi implements Required<StorageDataOperations> {
-  static processor : StorageDataOperations
-  static controller : StorageDataOperations
+export class StorageApi implements Required<StorageProcessor> {
+  static processor : StorageProcessor
+  static controller : StorageProcessor
   
-  constructor( storageprocessor : StorageDataOperations ){
-    if(storageprocessor == this) throw('ERROR cannot instantiate Storage with `this` as api')
-    StorageApi.processor = storageprocessor
+  constructor( config : StorageConfig ){
+    if(typeof config.processor == 'string' && !StorageProcessors[config.processor]) 
+      throw('ERROR invalid storage processor provided.')
+    StorageApi.processor = typeof config.processor == 'string'
+      ? StorageProcessors[config.processor] 
+      : config.processor
     StorageApi.controller = this
+    this.init(config.secrets)
+  }
+
+  init(secrets : StorageSecrets){
+    if(StorageApi.processor.init)   StorageApi.processor.init(secrets)
   }
 
   worldview = {
@@ -191,33 +199,6 @@ export class StorageApi implements Required<StorageDataOperations> {
 //     throw(new Error(reason))
 //   })
 //  }
-
-export type StorageFileList = { list :string[], next?:string } 
-
-export interface StorageOperations<KeysType , DataType> extends ApiOperation  {
-  list? : (keys : KeysType, getall? : boolean) => Promise< StorageFileList | undefined>
-  put? : (keys: Required<KeysType>, data: DataType, overwrite? : boolean) => Promise<boolean>
-  get : (keys: KeysType) => Promise<DataType | undefined>
-  query? : (match : (data: Partial<DataType>) => boolean | undefined) => Promise<DataType[] | undefined>
-  delete? : (keys: Partial<KeysType>, deleteall? : boolean) => Promise<boolean>
-} 
-
-export interface StorageDataOperations extends ApiTypeOperation {
-// store and retrieve worldview settings as user signed events 
-// for calculating a grapevine
-worldview? : StorageOperations<WorldviewKeys, WorldviewData>,
-
-// store and retrieve results and metadata from grapevine calculations
-// unsigned grapevine data is ONLY stored after verifying worldview event signatures 
-grapevine? : StorageOperations<GrapevineKeys, GrapevineData>,
-
-// retrieve scores associated with a grapevine. PUT is not permitted.
-// scores? : StorageType<ApiKeysTypes, GrapevineScoresStorage>,
-
-// query to return FULL scorecards from ANY grapevine
-scorecards? : StorageOperations<GrapevineKeys, ScorecardsRecord>
-}
-
 
 async function getWorldviewGrapevines(worldviewkeys : Required<WorldviewKeys>, limit = 0) : Promise<Grapevine[]> {
   let grapevines : Grapevine[] = []

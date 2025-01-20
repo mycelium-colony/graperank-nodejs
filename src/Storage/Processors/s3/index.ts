@@ -1,9 +1,12 @@
-import { StorageDataOperations, StorageFileList,  } from "../.."
-import { GrapevineData, GrapevineKeys, ScorecardExport, ScorecardKeys, ApiKeysTypes, WorldviewKeys, WorldviewData, ApiTypeName, ScorecardsRecord } from "../../../types"
+import { GrapevineData, GrapevineKeys, ScorecardExport, ScorecardKeys, ApiKeysTypes, WorldviewKeys, WorldviewData, ApiTypeName, ScorecardsRecord, StorageProcessor, StorageFileList, s3secrets } from "../../../types"
 import { forEachBigArray } from "../../../utils"
 import { s3 } from "./s3api"
 
-export class s3Processor implements StorageDataOperations {
+export class s3Processor implements StorageProcessor {
+
+  init(secrets : s3secrets){
+    s3.init(secrets)
+  }
 
   worldview = {
     async list(keys : WorldviewKeys, getall? : boolean ) { 

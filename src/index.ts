@@ -1,13 +1,13 @@
 import * as Calculator from "./Calculator";
 import * as Interpreter from "./Interpreter";
-import { StorageApi, StorageFileList, StorageProcessor } from "./Storage";
-import { ApiDataTypes, ApiOperation, ApiRequest, ApiTypeName, ApiTypeOperation, CalculatorParams, EngineRequest, GrapevineData, GrapevineKeys, ProtocolRequest, Rating, RatingsList, Scorecard, ScorecardKeys, ScorecardsRecord, timestamp, userId, WorldviewCalculation, WorldviewData, WorldviewKeys, WorldviewSettings } from "./types";
+import { StorageApi, StorageProcessors } from "./Storage";
+import { ApiDataTypes, ApiOperation, ApiTypeName, EngineRequest, GrapevineData, GrapevineKeys, RatingsList, Scorecard, ScorecardKeys, ScorecardsRecord, userId, WorldviewCalculation, WorldviewData, WorldviewKeys, StorageFileList, StorageConfig } from "./types";
 
 
-// const storage = new StorageApi( new StorageProcessor.s3 )
+// const storage = new StorageApi( new StorageProcessors.s3 )
 
 
-// export class GrapeRank implements ApiTypeOperation {
+// export class GrapeRank implements ApiProcessor {
 
 //   constructor(
 //     private request : EngineRequest,
@@ -28,8 +28,7 @@ import { ApiDataTypes, ApiOperation, ApiRequest, ApiTypeName, ApiTypeOperation, 
 
 
 export class GrapeRank implements ApiOperation {
-  private scorecards? : Scorecard[]
-  static storage = new StorageApi( new StorageProcessor.s3 )
+  private storage : StorageApi 
 
   // observer: userId;
   // context: string;
@@ -55,8 +54,8 @@ export class GrapeRank implements ApiOperation {
   }
 
   get storagetype(){
-    if(this.type && GrapeRank.storage[this.type])
-      return GrapeRank.storage[this.type]
+    if(this.type && this.storage[this.type])
+      return this.storage[this.type]
     return undefined
   }
 
@@ -82,9 +81,12 @@ export class GrapeRank implements ApiOperation {
 
   constructor(
     private request : EngineRequest,
-    private recalculate : boolean = false
+    storage : StorageConfig,
+    private recalculate : boolean = false,
   ){
     console.log("GrapeRank : initializing with EngineRequest : ",this.request)
+    this.storage = new StorageApi( storage )
+    
     // if(!request.observer || request.observer === 'undefined') throw("GrapeRank : ERROR initializing : mssing observer")
     // this.observer = request.observer
     // if(!request.context || request.context === 'undefined') throw("GrapeRank : ERROR initializing : mssing context")
@@ -101,11 +103,11 @@ export class GrapeRank implements ApiOperation {
 
     switch(type){
       case 'worldview' :
-        return GrapeRank.storage.worldview.list(this.request.keys as WorldviewKeys)
+        return this.storage.worldview.list(this.request.keys as WorldviewKeys)
       case 'grapevine' :
-        return GrapeRank.storage.grapevine.list(this.request.keys as GrapevineKeys)
+        return this.storage.grapevine.list(this.request.keys as GrapevineKeys)
       case 'scorecards' :
-        return GrapeRank.storage.scorecards.list(this.request.keys as ScorecardKeys)
+        return this.storage.scorecards.list(this.request.keys as ScorecardKeys)
     }
     return undefined
   }
@@ -119,13 +121,13 @@ export class GrapeRank implements ApiOperation {
       // TODO handle for worldview and grapevine requests
       case 'worldview' :
         // GET worldview from storage
-        data = await GrapeRank.storage.worldview.get(this.request.keys as WorldviewKeys)
+        data = await this.storage.worldview.get(this.request.keys as WorldviewKeys)
         break
       case 'grapevine' :
       case 'scorecards' :
         // GET grapevine from storage
         if(!this.request.keys.timestamp && !this.recalculate)
-          data = await GrapeRank.storage[type].get(this.request.keys as GrapevineKeys)
+          data = await this.storage[type].get(this.request.keys as GrapevineKeys)
         // calculate (and store) grapevine if NOT retrieved from storage
         if(!data){ 
           const calculation = await this.generate()
@@ -158,7 +160,7 @@ export class GrapeRank implements ApiOperation {
     // get worldview config
     if(!data){
       // get worldview data from Storage (or from preset ... as determined by Storage component)
-      data = await GrapeRank.storage.worldview.get(keys)
+      data = await this.storage.worldview.get(keys)
 
     }
     if(!data) return undefined // TODO log error
@@ -169,11 +171,11 @@ export class GrapeRank implements ApiOperation {
     // get ratercards from worldview input 
     // either from storage OR by iteratively calling this funciton calculate() 
     // if(data.input){
-    //   ratercards = await GrapeRank.storage.scorecards.get(data.input)
+    //   ratercards = await this.storage.scorecards.get(data.input)
     //   // if scorecards are not stored... get worldview and calculate new scorecards
     //   if(!ratercards ) {
     //     iteration = iteration ? iteration + 1 : 1
-    //     let inputworldview = await GrapeRank.storage.worldview.get(data.input)
+    //     let inputworldview = await this.storage.worldview.get(data.input)
     //     if(inputworldview) ratercards = await this.generate(data.input, inputworldview, iteration)
     //   }
     //   // if STILL no ratercards, 
@@ -193,9 +195,9 @@ export class GrapeRank implements ApiOperation {
     if(calculation) {
       let grapevinekey = {...keys, timestamp:calculation.timestamp}
       // send new grapevine to storage
-      await GrapeRank.storage.grapevine.put(grapevinekey, calculation.grapevine)
+      await this.storage.grapevine.put(grapevinekey, calculation.grapevine)
       /// send new scorecards to storage
-      await GrapeRank.storage.scorecards.put(grapevinekey, calculation.scorecards)
+      await this.storage.scorecards.put(grapevinekey, calculation.scorecards)
     }
     return calculation
   }

@@ -1,16 +1,14 @@
 // Adapted apiS3.ts from nostrmeet.me
 // FIXME env depends on being run inside svelte 
-import {env} from '$env/dynamic/private';
-import { PutObjectCommand, GetObjectCommand, S3Client, ListObjectsCommand, type GetObjectCommandOutput, type PutObjectCommandOutput, type ListObjectsCommandOutput } from '@aws-sdk/client-s3';
-import { StorageFileList } from '../..';
+import { PutObjectCommand, GetObjectCommand, S3Client, ListObjectsCommand, type GetObjectCommandOutput, type PutObjectCommandOutput, type ListObjectsCommandOutput, S3ClientConfig } from '@aws-sdk/client-s3';
+import { s3secrets, StorageFileList } from '../../../types';
 
-
-try{
-  if(!env || !env.SPACES_REGION || !env.SPACES_ENDPOINT || !env.SPACES_KEY || !env.SPACES_SECRET || env.SPACES_BUCKET)
-    throw('missing required ENV credentals for s3 client');
-}catch(e){
-  console.log('ERROR : ', e)
-}
+// try{
+//   if(!env || !env.SPACES_REGION || !env.SPACES_ENDPOINT || !env.SPACES_KEY || !env.SPACES_SECRET || env.SPACES_BUCKET)
+//     throw('missing required ENV credentals for s3 client');
+// }catch(e){
+//   console.log('ERROR : ', e)
+// }
 
 export type S3FileList = {
   Key : string, 
@@ -37,21 +35,32 @@ export interface S3ListObjectsInput extends S3ObjectInput {
 }
 
 export class s3 {
-    private static bucket = env.SPACES_BUCKET
-    private static _client:S3Client;
-    static {
-
+    static init(secrets: s3secrets) {
+      s3.config = {
+        forcePathStyle: false, // Configures to use subdomain/virtual calling format.
+        region: secrets.region, // Must be "us-east-1" when creating new Spaces. Otherwise, use the region in your endpoint (for example, nyc3).
+        endpoint: secrets.endpoint, // Find your endpoint in the control panel, under Settings. Prepend "https://".
+        credentials: {
+            accessKeyId: secrets.key, // Access key pair. You can create access key pairs using the control panel or API.
+            secretAccessKey: secrets.secret // Secret access key defined through an environment variable.
+        }
+      }
+      s3.bucket = secrets.bucket
     }
+    private static config : S3ClientConfig
+    private static bucket : string
+    private static _client: S3Client | undefined;
+
     private static get client(){
-        return s3._client || new S3Client({
-            forcePathStyle: false, // Configures to use subdomain/virtual calling format.
-            region: env.SPACES_REGION, // Must be "us-east-1" when creating new Spaces. Otherwise, use the region in your endpoint (for example, nyc3).
-            endpoint: env.SPACES_ENDPOINT, // Find your endpoint in the control panel, under Settings. Prepend "https://".
-            credentials: {
-                accessKeyId: env.SPACES_KEY, // Access key pair. You can create access key pairs using the control panel or API.
-                secretAccessKey: env.SPACES_SECRET // Secret access key defined through an environment variable.
-            }
-        } as any);}
+      if(s3._client){
+        return s3._client 
+      }else if(s3.config){
+        s3._client = new S3Client( s3.config as any)
+        return s3._client
+      }else{
+        throw('missing credentals required for s3 client');
+      }
+    }
 
     private static async send (op:'get', objectinput:S3ObjectInput) : Promise<GetObjectCommandOutput | undefined> 
     private static async send (op:'put', objectinput:S3ObjectInput) : Promise<PutObjectCommandOutput | undefined> 
