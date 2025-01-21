@@ -1,9 +1,7 @@
 import * as Protocols from "./protocols"
 import { InterpretationProtocol } from "./classes"
-import { forEachBigArray, mergeBigArrays } from "../utils"
+import { forEachBigArray, DEBUGTARGET } from "../utils"
 import { ProtocolRequest, RatingsList, userId , protocol, InterpreterResults, ProtocolResponse, RatingsMap} from "../types"
-
-const DEBUGTARGET = '2b6ffc569838d4d91ef5a4c0f86a370873e1cb9adbc0da0ed4e85370f5f93236'
 
 export async function interpret(raters:userId[], requests? : ProtocolRequest[] ) : Promise<InterpreterResults>{
   let responses : ProtocolResponse[] = []
@@ -45,13 +43,13 @@ export async function interpret(raters:userId[], requests? : ProtocolRequest[] )
         console.log("GrapeRank : interpret : "+request.protocol+" protocol : begin iteration ", thisiteration, " of ", maxiterations,", with ",thisiterationraters.size," raters")
         // DEBUG
         if(thisiterationraters.has(DEBUGTARGET))
-          console.log('DEBUG TRACK : interpret : thisiterationraters has target pubkey')
+          console.log('DEBUGTARGET : interpret : target found in thisiteration raters')
 
         try{
           // fetch protocol specific dataset for requestauthors OR newraters OR allraters
-          let fetchedIndex = await protocolFetchData(request.protocol, thisiterationraters)
+          let dos = await protocolFetchData(request.protocol, thisiterationraters)
           // interpret fetched data and add to newratings
-          newratings = await protocolInterpret(request.protocol, fetchedIndex)
+          newratings = await protocolInterpret(request.protocol, dos)
           console.log("GrapeRank : interpret : ",request.protocol," protocol : interpretation complete for iteration ",thisiteration)
 
           // prepare for next iteration ONLY IF not on final iteration
@@ -93,7 +91,8 @@ export async function interpret(raters:userId[], requests? : ProtocolRequest[] )
       }
     })
     numtargetratings.forEach((num,key)=>{
-      console.log('DEBUG TRACK : interperet : numtargetratings for ', key, num)
+      if(num > 1)
+      console.log('DEBUGTARGET : interperet : found more than ONE rating for ', key)
     }) 
   
   }
@@ -113,16 +112,17 @@ async function protocolFetchData(protocol:protocol, raters: Set<userId>){
   return await instance.fetchData(raters)
 }
 
-async function protocolInterpret(protocol : protocol, fetchedIndex : number): Promise<RatingsMap>{
+async function protocolInterpret(protocol : protocol, dos : number): Promise<RatingsMap>{
   let [source,datatype] = parseProtocolSlug(protocol)
   let instance = getProtocolInstance(source, datatype)
   // let numzero = 0
-  let newratings = await instance.interpret(fetchedIndex)
+  let newratings = await instance.interpret(dos)
+  let numtargetratings = 0
   for(let r in newratings){
     // if(newratings[r].score == 0) numzero ++
     // DEBUG
     if(newratings[r].ratee == DEBUGTARGET)
-      console.log('DEBUG TRACK : interpret : protocolInterpret() ', newratings[r])
+      console.log('DEBUGTARGET : interpret : rating ',numtargetratings,' returned by protocolInterpret() ', newratings[r])
   }
   // console.log("GrapeRank : interpret : "+protocol+" protocol : number of zero scored ratings = "+numzero+" of "+newratings.length+" ratings")
   return newratings
@@ -159,7 +159,7 @@ function getNewRaters(newratings : RatingsMap, allraters? : Map<userId, number>)
   })
   // DEBUG
   if(newraters.has(DEBUGTARGET))
-    console.log('DEBUG TRACK : interpret : newraters has target pubkey')
+    console.log('DEBUGTARGET : interpret : target found by getNewRaters()')
   return newraters
 }
 

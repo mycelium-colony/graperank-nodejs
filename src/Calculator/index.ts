@@ -1,4 +1,5 @@
 import type { CalculatorParams, CalculatorSums, elemId, GrapevineData, InterpreterResults, protocol, Rating, RatingsList, Scorecard, ScorecardData, ScorecardMeta, ScorecardsRecord, scoreindex, timestamp, userId, WorldviewCalculation, WorldviewKeys, WorldviewSettings } from "../types"
+import { DEBUGTARGET } from "../utils"
 
 let keys : Required<WorldviewKeys>
 let calculator : Required<CalculatorParams>
@@ -13,7 +14,8 @@ const DefaultParams : Required<CalculatorParams> = {
   attenuation : .5,
   // factor for calculating confidence 
   // MUST be bellow 1 or confidence will ALWAYS be 0
-  rigor : .7,
+  // CAUTION : too high (eg:.7) and users beyond a certain DOS (eg:2) will always have a score of zero
+  rigor : .5,
   // minimum score ABOVE WHICH scorecard will be included in output
   minscore : -1,
   // max difference between calculator iterations
@@ -252,8 +254,10 @@ class ScorecardCalculator {
     this._meta.set(rating.protocol, protocolmeta)
 
     // DEBUG
-    if(this._subject == '2b6ffc569838d4d91ef5a4c0f86a370873e1cb9adbc0da0ed4e85370f5f93236')
-      console.log('DEBUG DOS : CALCULATOR sum() ', this._sums, this._meta)
+    if(this._subject == DEBUGTARGET){
+      console.log('DEBUGTARGET : calculator._sums for target : ', this._sums)
+      console.log('DEBUGTARGET : calculator._meta for target : ', this._meta)
+    }
   }
 
   // STEP C : calculate influence

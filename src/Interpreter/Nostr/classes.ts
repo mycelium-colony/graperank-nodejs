@@ -3,7 +3,7 @@ import { Event as NostrEvent} from 'nostr-tools/core'
 import { Filter as NostrFilter} from 'nostr-tools/filter'
 import { SimplePool } from 'nostr-tools/pool'
 import { useWebSocketImplementation } from 'nostr-tools/pool'
-import { mergeBigArrays, sliceBigArray} from "../../utils.ts"
+import { DEBUGTARGET, mergeBigArrays, sliceBigArray} from "../../utils.ts"
 import { elemId, ProtocolParams, ProtocolRequest, Rating, RatingData, RatingsMap, userId } from "../../types.ts"
 import WebSocket from 'ws'
 import { npubEncode } from "nostr-tools/nip19"
@@ -31,7 +31,7 @@ type  NostrProtocolConfig<ParamsType extends ProtocolParams> = {
   kinds : number[],
   params : ParamsType,
   interpret? : 
-    (fetchedIndex : number) 
+    (dos : number) 
     => Promise<RatingsMap>,
   validate? : 
     (events : Set<NostrEvent>, authors : userId[], previous? : Set<NostrEvent>) 
@@ -45,7 +45,7 @@ export class NostrProtocol<ParamsType extends ProtocolParams> implements Interpr
   get params(){ return {...this._params, ...this.request.params}}
   fetched : Set<NostrEvent>[] = []
   interpreted : RatingsMap = new Map()
-  interpret : (this : InterpretationProtocol, fetchedIndex? : number) => Promise<RatingsMap>
+  interpret : (this : InterpretationProtocol, dos? : number) => Promise<RatingsMap>
   validate? : 
   (events : Set<NostrEvent>, authors : userId[], previous? : Set<NostrEvent>) 
   => boolean | userId[]
@@ -54,17 +54,18 @@ export class NostrProtocol<ParamsType extends ProtocolParams> implements Interpr
     this.kinds = config.kinds
     this._params = config.params
     this.validate = config.validate
-    this.interpret = async (fetchedIndex? : number) => {
+    this.interpret = async (dos? : number) => {
       if(!this.fetched.length) throw('GrapeRank : '+this.request.protocol+' protocol interpret() : ERROR : NO EVENTS FETCHED PRIOR TO INTERPRET')
       // use the set of fetched events at fetchedIndex or LAST index
-      fetchedIndex = fetchedIndex || this.fetched.length - 1
+      dos = dos || this.fetched.length
+      let fetchedIndex = dos - 1
       let newratings : RatingsMap 
-      console.log("GrapeRank : ",this.request.protocol," protocol : interptreting " ,this.fetched[fetchedIndex].size, " events fetched in iteration ", fetchedIndex)
+      console.log("GrapeRank : ",this.request.protocol," protocol : interptreting " ,this.fetched[fetchedIndex].size, " events fetched in iteration ", dos)
       // interpret newratings via defined callback or default
       if(config.interpret) {
-        newratings = await config.interpret(fetchedIndex) 
+        newratings = await config.interpret(dos) 
       }else{
-        newratings = await applyRatingsByTag(this, fetchedIndex)
+        newratings = await applyRatingsByTag(this, dos)
       }
 
       // merge newratings into this.interpreted
@@ -86,7 +87,7 @@ export class NostrProtocol<ParamsType extends ProtocolParams> implements Interpr
         }
       })
 
-      console.log("GrapeRank : ",this.request.protocol," protocol : merged iteration ",fetchedIndex," into total interpreted : ", numratingsmerged ," new ratings and ",numratingsduplicate," duplicate ratings from ",newratings.size," authors")
+      console.log("GrapeRank : ",this.request.protocol," protocol : merged iteration ",dos," into total interpreted : ", numratingsmerged ," new ratings and ",numratingsduplicate," duplicate ratings from ",newratings.size," authors")
 
       return newratings
     }
@@ -122,8 +123,8 @@ export class NostrProtocol<ParamsType extends ProtocolParams> implements Interpr
     console.log("GrapeRank : nostr protocol : fetching complete with ", fetchedSet.size, " events ")
 
     // add fetchedSet to this.fetched array of event sets, 
-    // and return the new index of fetchedSet within this.fetched
-    return this.fetched.push(fetchedSet) -1
+    // and return the new dos for ratings interpretation 
+    return this.fetched.push(fetchedSet)
   }
 
   // An iterative function ... 
@@ -169,8 +170,9 @@ export class NostrProtocol<ParamsType extends ProtocolParams> implements Interpr
 }
 
 
-export async function  applyRatingsByTag(instance : NostrProtocol<any>, fetchedIndex : number, tag = "p", rateeindex = 1, scoreindex? : number) : Promise<RatingsMap> {
+export async function  applyRatingsByTag(instance : NostrProtocol<any>, dos : number, tag = "p", rateeindex = 1, scoreindex? : number) : Promise<RatingsMap> {
   console.log("GrapeRank : nostr protocol : applyRatingsByTag()")
+  let fetchedIndex = dos - 1
   const fetchedSet = instance.fetched[fetchedIndex]
   const newratingsmap : RatingsMap = new Map()
   let eventindex : number = 0, 
@@ -212,8 +214,11 @@ export async function  applyRatingsByTag(instance : NostrProtocol<any>, fetchedI
             // and if the value of this tag[scoreindex] is a property in params ...
             // then apply a custom score per rating according to the index value in params
             score : scoreindex ? instance.params[event.tags[t][scoreindex]] as unknown as number : defaultscore,
-            dos : fetchedIndex
+            dos : dos
           })
+          if(ratee == DEBUGTARGET)
+            console.log('DEBUGTARGET : nostr-protocol : interpreted rating for target : ', raterratings.get(DEBUGTARGET))
+            
           totalratings ++
         }
       }

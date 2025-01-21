@@ -2,6 +2,7 @@ import * as Calculator from "./Calculator";
 import * as Interpreter from "./Interpreter";
 import { StorageApi, StorageProcessors } from "./Storage";
 import { ApiDataTypes, ApiOperation, ApiTypeName, EngineRequest, GrapevineData, GrapevineKeys, RatingsList, Scorecard, ScorecardKeys, ScorecardsRecord, userId, WorldviewCalculation, WorldviewData, WorldviewKeys, StorageFileList, StorageConfig } from "./types";
+import { DEBUGTARGET } from "./utils";
 
 
 // const storage = new StorageApi( new StorageProcessors.s3 )
@@ -134,6 +135,7 @@ export class GrapeRank implements ApiOperation {
           if(!calculation) return undefined // TODO log error
           data = calculation[type]
         }
+        if(data[DEBUGTARGET]) console.log('DEBUGTARGET : GrapeRank returned target scorecard : ', data[DEBUGTARGET])
     }
     return data
   }
