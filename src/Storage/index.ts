@@ -1,4 +1,4 @@
-import { GrapevineData, WorldviewData, GrapevineKeys, WorldviewKeys, ScorecardKeys, ApiKeysTypes, ScorecardData, ApiOperation, ApiProcessor, ScorecardsRecord, ApiTypeName, WorldviewSettings, DEMO_CONTEXT, DEFAULT_CONTEXT, Grapevine, StorageProcessor, StorageConfig, StorageSecrets } from "../types"
+import { GrapevineData, WorldviewData, GrapevineKeys, WorldviewKeys, ScorecardKeys, ApiKeysTypes, ScorecardData, ApiOperation, ApiProcessor, ScorecardsRecord, ApiTypeName, WorldviewSettings, DEMO_CONTEXT, DEFAULT_CONTEXT, Grapevine, StorageProcessor, StorageConfig, StorageSecrets, StorageFileList } from "../types"
 import { s3Processor } from "./Processors/s3"
 
 
@@ -26,10 +26,10 @@ export class StorageApi implements Required<StorageProcessor> {
   static controller : StorageProcessor
   
   constructor( config : StorageConfig ){
-    if(typeof config.processor == 'string' && !StorageProcessors[config.processor]) 
-      throw('ERROR invalid storage processor provided.')
+    if(typeof config.processor == 'string' && !StorageProcessors[config.processor] ) 
+      throw('GrapeRank : Storage : ERROR invalid storage processor provided.')
     StorageApi.processor = typeof config.processor == 'string'
-      ? StorageProcessors[config.processor] 
+      ? new StorageProcessors[config.processor] 
       : config.processor
     StorageApi.controller = this
     this.init(config.secrets)
@@ -45,6 +45,7 @@ export class StorageApi implements Required<StorageProcessor> {
     async list(keys : WorldviewKeys, getall? : boolean){ 
       if(!!StorageApi.processor.worldview?.list)
         return await StorageApi.processor.worldview.list(keys, getall)
+      console.log('GrapeRank : Storage : processor does not have worldview.list() function')
       return undefined
     },
 
@@ -54,8 +55,9 @@ export class StorageApi implements Required<StorageProcessor> {
       // remove calculated from worldview data
       data.grapevines = undefined
       // send to processor
-      if(!!StorageApi.processor.worldview && StorageApi.processor.worldview.put)
+      if(!!StorageApi.processor.worldview?.put)
         return await StorageApi.processor.worldview.put(keys, data)
+      console.log('GrapeRank : Storage : processor does not have worldview.put() function')
       return false
     },
 
@@ -68,10 +70,14 @@ export class StorageApi implements Required<StorageProcessor> {
       if(WORLDVIEW_PRESETS[keys.context]) 
         worldview = WORLDVIEW_PRESETS[keys.context]
       // get Worldview data from processor
-      if(!worldview && StorageApi.processor.worldview) 
+      if(!worldview && !!StorageApi.processor.worldview?.get)
         worldview = await StorageApi.processor.worldview.get(keys)
       // get list of calculated Grapevines from processor
-      if(worldview) worldview.grapevines = await getWorldviewGrapevines(keys as Required<WorldviewKeys>)
+      if(worldview){
+        worldview.grapevines = await getWorldviewGrapevines(keys as Required<WorldviewKeys>)
+      }else{
+        console.log('GrapeRank : Storage : no worldview provided and processor does not have worldview.get() function')
+      }
       return worldview
     },
 
@@ -88,8 +94,9 @@ export class StorageApi implements Required<StorageProcessor> {
   grapevine = {
     // retrieve list from processor
     async list(keys : GrapevineKeys, getall? : boolean){ 
-      if(!!StorageApi.processor.grapevine?.list)
+      if(StorageApi.processor.grapevine?.list)
         return await StorageApi.processor.grapevine.list(keys, getall)
+      console.log('GrapeRank : Storage : processor does not have grapevine.list() function')
       return undefined
     },
 
@@ -100,7 +107,8 @@ export class StorageApi implements Required<StorageProcessor> {
       // send to processor
       if(!!StorageApi.processor.grapevine && StorageApi.processor.grapevine.put)
         return await StorageApi.processor.grapevine.put(keys, data)
-      return false
+      console.log('GrapeRank : Storage : processor does not have grapevine.put() function')
+      return undefined
     },
 
     // retrieve Grapevine summary and metadata as GrapevineData
@@ -116,6 +124,7 @@ export class StorageApi implements Required<StorageProcessor> {
         if(StorageApi.processor.grapevine) 
           return await StorageApi.processor.grapevine.get(keys)
       }
+      console.log('GrapeRank : Storage : processor does not have grapevine.get() function')
       return undefined
     },
   }
@@ -151,13 +160,15 @@ export class StorageApi implements Required<StorageProcessor> {
     async list(keys : GrapevineKeys, getall? : boolean){ 
       if(!!StorageApi.processor.scorecards?.list)
         return await StorageApi.processor.scorecards.list(keys, getall)
+      console.log('GrapeRank : Storage : processor does not have scorecards.list() function')
       return undefined
     },
     // put grapevine scorecards
     async put(keys : Required<GrapevineKeys>, data : ScorecardsRecord, overwrite? : boolean) {
       if(StorageApi.processor.scorecards?.put) 
         return await StorageApi.processor.scorecards.put(keys, data)
-      return false
+      console.log('GrapeRank : Storage : processor does not have scorecards.put() function')
+      return undefined
     },
 
     // get grapevine scorecards
@@ -170,9 +181,10 @@ export class StorageApi implements Required<StorageProcessor> {
       if(keys.timestamp){
         // get scorecard data from processor
         console.log('GrapeRank : StorageApi : calling processor.scorecards.get() with : ',keys)
-        if(StorageApi.processor.scorecards) 
+        if(StorageApi.processor.scorecards.get) 
           return await StorageApi.processor.scorecards.get(keys)
       }
+      console.log('GrapeRank : Storage : processor does not have scorecards.get() function')
       return undefined
     },
 
@@ -223,12 +235,13 @@ async function getWorldviewGrapevines(worldviewkeys : Required<WorldviewKeys>, l
 const timestampregex = /\d{9,}/g
 async function getCalculationTimestamps(type: 'grapevine' | 'scorecards', keys : Required<WorldviewKeys>, index=0) : Promise<number[]>{
   let timestamplist : number[] = []
-  let filenamelist : string[] | undefined
-  if(StorageApi.processor[type]?.list){
-    filenamelist = await StorageApi.processor[type].list(keys, true).then((files)=> files?.list)
+  let files : StorageFileList | undefined
+  if(StorageApi.controller[type]?.list){
+    files = await StorageApi.controller[type].list(keys, true)
   }
-  if(filenamelist){
-    filenamelist.forEach((filename)=>{
+  console.log('GrapeRank : Storage : getCalculationTimestamps() retrieved files for ',type,' : ',files)
+  if(files){
+    files.list.forEach((filename)=>{
       timestamplist.push(filename as unknown as number)
       // let match = filename.match(timestampregex)
       // if(match && match[index]) timestamplist.push(match[index] as unknown as number)
