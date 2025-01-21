@@ -1,4 +1,4 @@
-import * as types from "../types.ts"
+import * as types from "../types"
 
 
 export interface InterpretationProtocol {

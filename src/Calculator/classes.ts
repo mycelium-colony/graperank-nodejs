@@ -182,7 +182,7 @@ class GrapevineValue implements ScorecardData {
     return {
       confidence : 0,
       score : 0,
-      input : { count:{}, dos:0, weights:0},
+      meta : {},
       ...from 
     }
   }

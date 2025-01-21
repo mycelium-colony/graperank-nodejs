@@ -1,5 +1,5 @@
-import { NostrProtocol, applyRatingsByTag } from "../classes.ts";
-import * as types from "../../../types.ts"
+import { NostrProtocol, applyRatingsByTag } from "../classes";
+import * as types from "../../../types"
 import { Event as NostrEvent} from 'nostr-tools/core'
 
 interface MutesParams extends types.ProtocolParams {

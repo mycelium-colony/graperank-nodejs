@@ -1,10 +1,10 @@
-import {InterpretationProtocol} from "../classes.ts"
+import {InterpretationProtocol} from "../classes"
 import { Event as NostrEvent} from 'nostr-tools/core'
 import { Filter as NostrFilter} from 'nostr-tools/filter'
 import { SimplePool } from 'nostr-tools/pool'
 import { useWebSocketImplementation } from 'nostr-tools/pool'
-import { DEBUGTARGET, mergeBigArrays, sliceBigArray} from "../../utils.ts"
-import { elemId, ProtocolParams, ProtocolRequest, Rating, RatingData, RatingsMap, userId } from "../../types.ts"
+import { DEBUGTARGET, mergeBigArrays, sliceBigArray} from "../../utils"
+import { elemId, ProtocolParams, ProtocolRequest, Rating, RatingData, RatingsMap, userId } from "../../types"
 import WebSocket from 'ws'
 import { npubEncode } from "nostr-tools/nip19"
 useWebSocketImplementation(WebSocket)
