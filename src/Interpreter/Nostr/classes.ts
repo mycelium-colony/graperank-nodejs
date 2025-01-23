@@ -11,12 +11,12 @@ useWebSocketImplementation(WebSocket)
 
 const relays = [
   "wss://purplepag.es",
-  "wss://profiles.nostr1.com",
+  // "wss://profiles.nostr1.com",
   "wss://relay.primal.net",
   "wss://relay.damus.io",
   "wss://nostr-pub.wellorder.net",
   "wss://relay.nostr.bg",
-  "wss://nos.lol	239	true",
+  "wss://nos.lol",
   "wss://nostr.bitcoiner.social",
   "wss://nostr.fmt.wiz.biz",
   "wss://nostr.oxtr.dev",
