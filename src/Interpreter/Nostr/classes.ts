@@ -26,7 +26,7 @@ const relays = [
   "wss://soloco.nl",
 ]
 
-const maxauthors = 1000
+const maxauthors = 500
 type  NostrProtocolConfig<ParamsType extends ProtocolParams> = {
   kinds : number[],
   params : ParamsType,
