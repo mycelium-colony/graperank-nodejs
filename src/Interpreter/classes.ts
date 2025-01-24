@@ -1,13 +1,13 @@
-import * as types from "../types"
+import { ProtocolParams, ProtocolRequest, RatingsMap, userId } from "../types"
 
 
-export interface InterpretationProtocol {
+export interface InterpretationProtocol<ParamsType extends ProtocolParams> {
   // outputs JsonDoc formatted schema of allowed params for API documentation of each instance
   readonly schema? : string
   // the request object as set by interpret API
-  request : types.ProtocolRequest
+  request : ProtocolRequest
   // params for interpretation (should return merged default and requested params)
-  params : types.ProtocolParams
+  params : ParamsType
   // an array of ALL data sets fetched by this protocol instance, 
   // each call to fetchData() produces ONE set in `fetched` array
   // whereby any NEW protocol iteration uses NEW raters from the previous iteration,
@@ -15,15 +15,18 @@ export interface InterpretationProtocol {
   readonly fetched : Set<any>[]
   // a map of ALL UNIQUE ratings indexed by rater and ratee
   // each call to interperet() method adds additional records to this map 
-  readonly interpreted : types.RatingsMap 
+  readonly interpreted : RatingsMap 
   // a callback to fetch data. called by Interpreter API, adds a new set to fetched 
   // returns `fetchedIndex`, the index (dos) of the fetchedSet which was just added
-  fetchData(this : InterpretationProtocol, authors? : Set<types.userId>) : Promise<number>
+  fetchData(this : InterpretationProtocol<ParamsType>, authors? : Set<userId>) : Promise<number>
   // a callback for interpreting data. called by Interpreter API
   // use `fetchedIndex` to specify a set of fetched data to interpret
   // returns the interpreted data ONLY from specified set of fetched (not the entire set of interpteted)
-  interpret(this : InterpretationProtocol, fetchedIndex? : number) : Promise<types.RatingsMap>
+  interpret(this : InterpretationProtocol<ParamsType>, fetchedIndex? : number) : Promise<RatingsMap>
 }
+
+export interface ProtocolFactory extends Map<string, () => InterpretationProtocol<ProtocolParams>>{}
+
 
 /******* DEMO *********
 

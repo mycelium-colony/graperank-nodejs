@@ -3,49 +3,50 @@ import { Event as NostrEvent} from 'nostr-tools/core'
 import { Filter as NostrFilter} from 'nostr-tools/filter'
 import { SimplePool } from 'nostr-tools/pool'
 import { useWebSocketImplementation } from 'nostr-tools/pool'
-import { DEBUGTARGET, mergeBigArrays, sliceBigArray} from "../../utils"
+import { DEBUGTARGET, sliceBigArray} from "../../utils"
 import { elemId, ProtocolParams, ProtocolRequest, Rating, RatingData, RatingsMap, userId } from "../../types"
 import WebSocket from 'ws'
 import { npubEncode } from "nostr-tools/nip19"
 useWebSocketImplementation(WebSocket)
 
 const relays = [
-  "wss://purplepag.es",
+  "wss://gv.rogue.earth",
+  // "wss://purplepag.es",
   // "wss://profiles.nostr1.com",
-  "wss://relay.primal.net",
-  "wss://relay.damus.io",
-  "wss://nostr-pub.wellorder.net",
-  "wss://relay.nostr.bg",
-  "wss://nos.lol",
-  "wss://nostr.bitcoiner.social",
-  "wss://nostr.fmt.wiz.biz",
-  "wss://nostr.oxtr.dev",
-  "wss://nostr.mom",
-  "wss://relay.nostr.band",
-  "wss://relay.snort.social",
-  "wss://soloco.nl",
+  // "wss://relay.primal.net",
+  // "wss://relay.damus.io",
+  // "wss://nostr-pub.wellorder.net",
+  // "wss://relay.nostr.bg",
+  // "wss://nos.lol",
+  // "wss://nostr.bitcoiner.social",
+  // "wss://nostr.fmt.wiz.biz",
+  // "wss://nostr.oxtr.dev",
+  // "wss://nostr.mom",
+  // "wss://relay.nostr.band",
+  // "wss://relay.snort.social",
+  // "wss://soloco.nl",
 ]
 
 const maxauthors = 500
-type  NostrProtocolConfig<ParamsType extends ProtocolParams> = {
+export type  NostrProtocolConfig<ParamsType extends ProtocolParams> = {
   kinds : number[],
   params : ParamsType,
   interpret? : 
-    (dos : number) 
+    (instance : InterpretationProtocol<ParamsType>, dos : number) 
     => Promise<RatingsMap>,
   validate? : 
     (events : Set<NostrEvent>, authors : userId[], previous? : Set<NostrEvent>) 
     => boolean | userId[],
 }
 
-export class NostrProtocol<ParamsType extends ProtocolParams> implements InterpretationProtocol {
+export class NostrProtocol<ParamsType extends ProtocolParams> implements InterpretationProtocol<ParamsType> {
   readonly kinds : number[]
   request : ProtocolRequest
   private _params : ParamsType
   get params(){ return {...this._params, ...this.request.params}}
   fetched : Set<NostrEvent>[] = []
   interpreted : RatingsMap = new Map()
-  interpret : (this : InterpretationProtocol, dos? : number) => Promise<RatingsMap>
+  interpret : (dos? : number) => Promise<RatingsMap>
   validate? : 
   (events : Set<NostrEvent>, authors : userId[], previous? : Set<NostrEvent>) 
   => boolean | userId[]
@@ -63,7 +64,7 @@ export class NostrProtocol<ParamsType extends ProtocolParams> implements Interpr
       console.log("GrapeRank : ",this.request.protocol," protocol : interptreting " ,this.fetched[fetchedIndex].size, " events fetched in iteration ", dos)
       // interpret newratings via defined callback or default
       if(config.interpret) {
-        newratings = await config.interpret(dos) 
+        newratings = await config.interpret(this, dos) 
       }else{
         newratings = await applyRatingsByTag(this, dos)
       }
@@ -136,13 +137,13 @@ export class NostrProtocol<ParamsType extends ProtocolParams> implements Interpr
     console.log("GrapeRank : nostr protocol : fetching events in request ",iteration, " for ",filter.authors?.length, " raters")
     return new Promise((resolve)=>{
       fetchEvents(filter).then(async (newFetchedSet)=>{
-        let validation = this.validate ? this.validate(newFetchedSet, filter.authors as string[], fetchedSet) : true
+        let validation = true // this.validate ? this.validate(newFetchedSet, filter.authors as string[], fetchedSet) : true
         try{
 
           // FALSE validation will log error
-          if(validation === false ) {
-            throw('events validaiton failed')
-          }
+          // if(validation === false ) {
+          //   throw('events validaiton failed')
+          // }
 
           // TRUE validation will add events to fetchedSet
           if(validation === true){ 
@@ -257,7 +258,7 @@ export function validateOneEventIsNew( events : Set<NostrEvent>, authors : userI
   if(!previous || !previous.size) return true
   previous.forEach((pevent)=>{
     events.forEach((newevent)=>{
-      if(pevent.id == newevent.id) return true
+      if(pevent.id != newevent.id) return true
     })
   })
   return false

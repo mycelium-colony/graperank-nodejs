@@ -1,9 +1,9 @@
-import * as Protocols from "./protocols"
-import { InterpretationProtocol } from "./classes"
+import { Protocols } from "./protocols"
 import { forEachBigArray, DEBUGTARGET } from "../utils"
 import { ProtocolRequest, RatingsList, userId , protocol, InterpreterResults, ProtocolResponse, RatingsMap} from "../types"
 
 export async function interpret(raters:userId[], requests? : ProtocolRequest[] ) : Promise<InterpreterResults>{
+  const protocol = new Protocols()
   let responses : ProtocolResponse[] = []
   let ratings : RatingsList = []
   // `allraters` map keys hold all raters added as input and between protocol requests
@@ -24,9 +24,9 @@ export async function interpret(raters:userId[], requests? : ProtocolRequest[] )
     for(let r in requests){
       let requestindex = r as unknown as number
       let request = requests[requestindex]
-      protocolSetRequest(request)
+      protocol.setRequest(request)
       // reset newraters, protocolratings, and newratings between protocol requests
-      const protocolratings = protocolGetInterpreted(request.protocol)
+      const protocolratings = protocol.getInterpreted(request.protocol)
       let newraters : Set<userId> = new Set()
       let newratings : RatingsMap = new Map()
       let thisiteration : number = 0
@@ -47,9 +47,9 @@ export async function interpret(raters:userId[], requests? : ProtocolRequest[] )
 
         try{
           // fetch protocol specific dataset for requestauthors OR newraters OR allraters
-          let dos = await protocolFetchData(request.protocol, thisiterationraters)
+          let dos = await protocol.fetchData(request.protocol, thisiterationraters)
           // interpret fetched data and add to newratings
-          newratings = await protocolInterpret(request.protocol, dos)
+          newratings = await protocol.interpret(request.protocol, dos)
           console.log("GrapeRank : interpret : ",request.protocol," protocol : interpretation complete for iteration ",thisiteration)
 
           // prepare for next iteration ONLY IF not on final iteration
@@ -96,57 +96,12 @@ export async function interpret(raters:userId[], requests? : ProtocolRequest[] )
     }) 
   
   }
+  protocol.clear()
   return {ratings, responses}
 
 }
 
-async function protocolSetRequest(request:ProtocolRequest){
-  let [source,datatype] = parseProtocolSlug(request.protocol)
-  let instance = getProtocolInstance(source, datatype)
-  instance.request = request
-}
 
-async function protocolFetchData(protocol:protocol, raters: Set<userId>){
-  let [source,datatype] = parseProtocolSlug(protocol)
-  let instance = getProtocolInstance(source, datatype)
-  return await instance.fetchData(raters)
-}
-
-async function protocolInterpret(protocol : protocol, dos : number): Promise<RatingsMap>{
-  let [source,datatype] = parseProtocolSlug(protocol)
-  let instance = getProtocolInstance(source, datatype)
-  // let numzero = 0
-  let newratings = await instance.interpret(dos)
-  let numtargetratings = 0
-  for(let r in newratings){
-    // if(newratings[r].score == 0) numzero ++
-    // DEBUG
-    if(newratings[r].ratee == DEBUGTARGET)
-      console.log('DEBUGTARGET : interpret : rating ',numtargetratings,' returned by protocolInterpret() ', newratings[r])
-  }
-  // console.log("GrapeRank : interpret : "+protocol+" protocol : number of zero scored ratings = "+numzero+" of "+newratings.length+" ratings")
-  return newratings
-}
-
-function protocolGetInterpreted(protocol : protocol) : RatingsMap {
-  let [source,datatype] = parseProtocolSlug(protocol)
-  let instance = getProtocolInstance(source, datatype)
-  return instance.interpreted
-}
-
-function parseProtocolSlug(protocol : protocol) : [string, string]{
-  let tuple = protocol.split("-",2)
-  if(!tuple[1]) tuple[1] = ""
-  return tuple as [string, string]
-}
-
-function getProtocolInstance(source:string, datatype:string,) : InterpretationProtocol {
-  let instance = Protocols[source][datatype]
-  if(!instance.fetchData || !instance.interpret){
-    throw('no protocol instance found for ' + source +"-"+ datatype)
-  }
-  return instance
-}
 
 // FIXME this ONLY works when USERS are being rated, not CONTENT
 // TODO extraction of new authors from rated content SHOULD be handled by each protocol ...  
