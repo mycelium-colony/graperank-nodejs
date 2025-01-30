@@ -1,7 +1,7 @@
 import * as Calculator from "./Calculator";
 import * as Interpreter from "./Interpreter";
 import { StorageApi, StorageProcessors } from "./Storage";
-import { ApiDataTypes, ApiOperation, ApiTypeName, EngineRequest, GrapevineData, GrapevineKeys, RatingsList, Scorecard, ScorecardKeys, ScorecardsRecord, userId, WorldviewCalculation, WorldviewData, WorldviewKeys, StorageFileList, StorageConfig } from "./types";
+import { ApiDataTypes, ApiOperation, ApiTypeName, EngineRequest, GrapevineData, GrapevineKeys, RatingsList, Scorecard, ScorecardKeys, ScorecardsRecord, userId, GraperankCalculation, WorldviewData, WorldviewKeys, StorageFileList, StorageConfig, GraperankSettings, ScorecardsEntries, ApiResponse, ApiRequest, ApiOperationName, ProtocolRequest, protocol } from "./types";
 import { DEBUGTARGET } from "./utils";
 
 
@@ -98,79 +98,93 @@ export class GrapeRank implements ApiOperation {
     // this.dev = request.dev || {}
   }
 
-  async list(type? : ApiTypeName) : Promise<StorageFileList | undefined> {
+  async list(type? : ApiTypeName) : Promise<ApiResponse> {
     type = type || this.type
     if(!type) return undefined // TODO log error
+    let response = this.newResponse('list')
 
     switch(type){
       case 'worldview' :
-        return this.storage.worldview.list(this.request.keys as WorldviewKeys)
+        response.list = await this.storage.worldview.list(this.request.keys as WorldviewKeys)
       case 'grapevine' :
-        return this.storage.grapevine.list(this.request.keys as GrapevineKeys)
+        response.list = await  this.storage.grapevine.list(this.request.keys as GrapevineKeys)
       case 'scorecards' :
-        return this.storage.scorecards.list(this.request.keys as ScorecardKeys)
+        response.list = await  this.storage.scorecards.list(this.request.keys as ScorecardKeys)
     }
-    return undefined
+    response.status = response.list ? true : false
+    return response
   }
 
-  async get(type? : ApiTypeName ) : Promise<ApiDataTypes | undefined> {
+  async get(type? : ApiTypeName ) : Promise<ApiResponse> {
     type = type || this.type
-    if(!type) return undefined // TODO log error
-    let data : ScorecardsRecord | GrapevineData | WorldviewData | undefined
+    if(!type) return undefined
+    // TODO generate response status && messages
+    let response = this.newResponse('get')
 
     switch(type){ 
-      // TODO handle for worldview and grapevine requests
-      case 'worldview' :
-        // GET worldview from storage
-        data = await this.storage.worldview.get(this.request.keys as WorldviewKeys)
-        break
-      case 'grapevine' :
+
       case 'scorecards' :
-        // GET grapevine from storage
-        if(!this.request.keys.timestamp && !this.recalculate)
-          data = await this.storage[type].get(this.request.keys as GrapevineKeys)
-        // calculate (and store) grapevine if NOT retrieved from storage
-        if(!data){ 
-          const calculation = await this.generate()
-          if(!calculation) return undefined // TODO log error
-          data = calculation[type]
+        // get scorecards from storage
+        if(!this.recalculate)
+          response.scorecards = await this.storage.scorecards.get(this.request.keys as GrapevineKeys)
+
+      case 'grapevine' :
+        // AND/OR get grapevine from storage
+        if((type == 'scorecards' && response.scorecards?.length) || !this.recalculate )
+          response.grapevine = await this.storage.grapevine.get(this.request.keys as GrapevineKeys)
+
+        // calculate (and store) grapevine and scorecards if NOT retrieved from storage
+        if(!response.grapevine){
+          let settings : GraperankSettings | undefined = this.request.data['graperank']
+          response = { ...response, ...await this.generate(settings) }
         }
-        if(data[DEBUGTARGET]) console.log('DEBUGTARGET : GrapeRank returned target scorecard : ', data[DEBUGTARGET])
+
+      case 'worldview' :
+        // AND/OR get worldview from storage
+        response.worldview = await this.storage.worldview.get(this.request.keys as WorldviewKeys)
     }
-    return data
+    // if(response.scorecards[DEBUGTARGET]) console.log('DEBUGTARGET : GrapeRank returned target scorecard : ', data[DEBUGTARGET])
+    return response
   }
 
-  async put(){
+  async put(data : ApiDataTypes) : Promise<ApiResponse> {
+    let response = this.newResponse('put')
+
     switch(this.type){
-      // case 'worldview' :
-      //   break
-      // case 'grapevine' :
-      //   break
-      // case 'scorecards' :
-      //   break
+      // do nothing for calculated data
+      case 'scorecards' :
+      case 'grapevine' :
+        break
+      // TODO update worldview
+      case 'worldview' :
+        break
     }
+    return response
   }
 
   // calculate and store a new grapevine
-  private async generate(keys? : Required<WorldviewKeys>, data? : WorldviewData, iteration? : number) : Promise<WorldviewCalculation | undefined>{
+  private async generate(settings? : GraperankSettings, iteration? : number) : Promise<GraperankCalculation | undefined>{
     // validate keys
+    let keys = settings?.keys
     if(!keys && this.request.keys.observer && this.request.keys.context) {
       keys = this.request.keys as Required<WorldviewKeys>
     }
     if(!keys) return undefined // TODO log error
 
-    // get worldview config
-    if(!data){
-      // get worldview data from Storage (or from preset ... as determined by Storage component)
-      data = await this.storage.worldview.get(keys)
+    let worldview = await this.storage.worldview.get(keys)
 
+    // get graperank settings from worldview
+    if(!settings){
+      // get graperank settings from worldview.graperank (default) 
+      // OR from the worldview.calculated grapevine
+      // OR from the latest calculated grapevine
+      settings = worldview.graperank || (await this.storage.grapevine.get({...keys, timestamp : worldview.calculated})).graperank
     }
-    if(!data) return undefined // TODO log error
+    if(!settings) return undefined // TODO log error
     
-    let ratercards : ScorecardsRecord | undefined
+    let ratercards : ScorecardsEntries | undefined
 
-    // TODO handle case for `input` worldview
-    // get ratercards from worldview input 
+    // TODO get ratercards from worldview input 
     // either from storage OR by iteratively calling this funciton calculate() 
     // if(data.input){
     //   ratercards = await this.storage.scorecards.get(data.input)
@@ -185,23 +199,45 @@ export class GrapeRank implements ApiOperation {
     //   if(!ratercards) return undefined
     // }
 
-    // Calculate
+    // Interpret ratings
     const raters = this.getRaters(ratercards) || [keys.observer]
     console.log("GrapeRank : calling interpret with " ,raters.length, " authors ...")
-    const interpeterresults = await Interpreter.interpret(raters, data.interpreters)
+    const interpeterresults = await Interpreter.interpret(raters, settings.interpreters)
     const ratings : RatingsList = interpeterresults.ratings
   
-    // TODO what to do if new authors are "discovered" by interpreter?
+    // Calculate scorecards
     console.log("GrapeRank : calling calculate with "+ratings.length+" ratings... ")
-    const calculation = Calculator.calculate(ratings, keys, data)
+    const calculation = Calculator.calculate(ratings, keys, settings)
+
+    // write to storage
     if(calculation) {
-      let grapevinekey = {...keys, timestamp:calculation.timestamp}
+      // Update worldview.calculated
+      if(worldview.overwrite !== false) {
+        worldview.calculated = calculation.keys.timestamp
+        await this.storage.worldview.put(keys, worldview)
+      }
+      // set grapevine expires
+      if(worldview.expiry) 
+        calculation.grapevine.expires = calculation.keys.timestamp + worldview.expiry
+
+      // set graperank interpreters used for this grapevine
+      let interpreters : Map<protocol,ProtocolRequest> = new Map()
+      interpeterresults.responses.forEach((response)=>{
+        interpreters.set(response.request.protocol, response.request)
+      })
+      calculation.grapevine.graperank = {...calculation.grapevine.graperank, interpreters : [...interpreters.values()]}
+
       // send new grapevine to storage
-      await this.storage.grapevine.put(grapevinekey, calculation.grapevine)
+      await this.storage.grapevine.put(calculation.keys, calculation.grapevine)
       /// send new scorecards to storage
-      await this.storage.scorecards.put(grapevinekey, calculation.scorecards)
+      await this.storage.scorecards.put(calculation.keys, calculation.scorecards)
+
+      if(worldview.archive === false) {
+        // TODO delete old grapevines
+      }
+
     }
-    return calculation
+    return {...calculation, worldview}
   }
 
   // export() : Scorecard[] {
@@ -228,11 +264,18 @@ export class GrapeRank implements ApiOperation {
   //   Storage.
   // }
 
-  private getRaters(scorecards : ScorecardsRecord = {}) : userId[] | undefined {
+  private getRaters(scorecards : ScorecardsEntries = []) : userId[] | undefined {
     const raters : userId[] = []
-    for(let userid in scorecards) {
-      raters.push(userid)
-    }
+    scorecards.forEach((entry) => {
+      raters.push(entry[0])
+    })
     return raters.length ? raters : undefined
+  }
+
+  private newResponse(op : ApiOperationName) : ApiResponse {
+    return {
+      op,
+      keys : this.request.keys,
+    }
   }
 }

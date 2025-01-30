@@ -1,4 +1,4 @@
-import { GrapevineData, GrapevineKeys, ScorecardExport, ScorecardKeys, ApiKeysTypes, WorldviewKeys, WorldviewData, ApiTypeName, ScorecardsRecord, StorageProcessor, StorageFileList, s3secrets } from "../../../types"
+import { GrapevineData, GrapevineKeys, ScorecardExport, ScorecardKeys, ApiKeysTypes, WorldviewKeys, WorldviewData, ApiTypeName, ScorecardsRecord, StorageProcessor, StorageFileList, s3secrets, ScorecardsEntries } from "../../../types"
 import { forEachBigArray } from "../../../utils"
 import { s3 } from "./s3api"
 
@@ -104,14 +104,14 @@ export class s3Processor implements StorageProcessor {
       return await s3Processor.filelist('scorecards', keys, getall)
     },
     async get(keys : GrapevineKeys) {
-      let data : ScorecardsRecord | undefined
+      let data : ScorecardsEntries | undefined
       let s3key = s3Processor.key('scorecards',keys)
       if(s3key) data = await s3.get(s3key)
       return data 
     },
     // put all scorecards for a grapevine
     // TODO delete scorecards or try again if put returns false
-    async put(keys : Required<GrapevineKeys>, data : ScorecardsRecord){
+    async put(keys : Required<GrapevineKeys>, data : ScorecardsEntries){
       let s3key = s3Processor.key('scorecards',keys)
       if(s3key) return await s3.put(s3key,data, true)
       return false

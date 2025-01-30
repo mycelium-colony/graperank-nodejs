@@ -34,7 +34,7 @@ export async function interpret(raters:userId[], requests? : ProtocolRequest[] )
       let thisiterationraters : Set<userId>
       if(request.authors && request.authors.length) requestauthors = new Set(request.authors)
 
-      // console.log("GrapeRank : interpret : calling " +request.protocol+" protocol with ", maxiterations," iterations")
+      console.log("GrapeRank : interpret : calling " +request.protocol+" protocol with params : ",protocol.get(request.protocol).params)
 
       while(thisiteration < maxiterations){
         // increment for each protocol iteration
@@ -66,7 +66,7 @@ export async function interpret(raters:userId[], requests? : ProtocolRequest[] )
         }
 
         responses.push({
-          protocol : request.protocol,
+          request : {...request, params : protocol.get(request.protocol).params},
           index : requestindex,
           iteration : thisiteration,
           numraters : thisiterationraters.size,

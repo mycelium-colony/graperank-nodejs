@@ -11,20 +11,19 @@ useWebSocketImplementation(WebSocket)
 
 const relays = [
   "wss://gv.rogue.earth",
-  // "wss://purplepag.es",
-  // "wss://profiles.nostr1.com",
-  // "wss://relay.primal.net",
-  // "wss://relay.damus.io",
+  "wss://purplepag.es",
+  "wss://relay.primal.net",
+  "wss://relay.damus.io",
   // "wss://nostr-pub.wellorder.net",
   // "wss://relay.nostr.bg",
-  // "wss://nos.lol",
-  // "wss://nostr.bitcoiner.social",
+  "wss://nostr.bitcoiner.social",
   // "wss://nostr.fmt.wiz.biz",
   // "wss://nostr.oxtr.dev",
   // "wss://nostr.mom",
-  // "wss://relay.nostr.band",
-  // "wss://relay.snort.social",
+  "wss://relay.nostr.band",
+  "wss://relay.snort.social",
   // "wss://soloco.nl",
+  "wss://nos.lol",
 ]
 
 const maxauthors = 500
@@ -223,7 +222,7 @@ export async function  applyRatingsByTag(instance : NostrProtocol<any>, dos : nu
           totalratings ++
         }
       }
-      console.log("GrapeRank : applyRatingsByTag : event by author proccessed with ", raterratings.size, " new ratings tags and ",  duplicateratings - oldduplicateratings, " ratings already interpreted" )
+      // console.log("GrapeRank : applyRatingsByTag : event by author proccessed with ", raterratings.size, " new ratings tags and ",  duplicateratings - oldduplicateratings, " ratings already interpreted" )
     }else{
       console.log("GrapeRank : nostr protocol : applyRatingsByTag : event not processed")
     }

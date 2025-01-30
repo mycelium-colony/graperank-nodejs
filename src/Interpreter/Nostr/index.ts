@@ -51,7 +51,7 @@ NostrProtocolFactory.set('nostr-reports', () => new NostrProtocol<ReportsParams>
       other : 0, // for reports that don't fit in the above categories
     },
     interpret : (instance : NostrProtocol<ReportsParams>, fetchedIndex? : number) => {
-      return applyRatingsByTag(instance, fetchedIndex, 'P', 1, 2)
+      return applyRatingsByTag(instance, fetchedIndex, 'p', 1, 2)
     }
   }
 ))

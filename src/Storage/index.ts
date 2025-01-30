@@ -1,4 +1,4 @@
-import { GrapevineData, WorldviewData, GrapevineKeys, WorldviewKeys, ScorecardKeys, ApiKeysTypes, ScorecardData, ApiOperation, ApiProcessor, ScorecardsRecord, ApiTypeName, WorldviewSettings, DEMO_CONTEXT, DEFAULT_CONTEXT, Grapevine, StorageProcessor, StorageConfig, StorageSecrets, StorageFileList } from "../types"
+import { GrapevineData, WorldviewData, GrapevineKeys, WorldviewKeys, ScorecardKeys, ApiKeysTypes, ScorecardData, ApiOperation, ApiProcessor, ScorecardsRecord, ApiTypeName, GraperankSettings, DEMO_CONTEXT, DEFAULT_CONTEXT, Grapevine, StorageProcessor, StorageConfig, StorageSecrets, StorageFileList, ScorecardsEntries } from "../types"
 import { s3Processor } from "./Processors/s3"
 
 
@@ -52,8 +52,6 @@ export class StorageApi implements Required<StorageProcessor> {
     // store the worldview settings event for calculating a grapevine
     async put(keys : Required<WorldviewKeys>, data : WorldviewData){ 
       // TODO verify the worldview signature
-      // remove calculated from worldview data
-      data.grapevines = undefined
       // send to processor
       if(!!StorageApi.processor.worldview?.put)
         return await StorageApi.processor.worldview.put(keys, data)
@@ -66,15 +64,15 @@ export class StorageApi implements Required<StorageProcessor> {
       // set default context if none provided
       if(!keys.context) keys.context = DEFAULT_CONTEXT
       let worldview : WorldviewData | undefined
-      // get worldview data from preset
-      if(WORLDVIEW_PRESETS[keys.context]) 
-        worldview = WORLDVIEW_PRESETS[keys.context]
       // get Worldview data from processor
-      if(!worldview && !!StorageApi.processor.worldview?.get)
+      if(!!StorageApi.processor.worldview?.get)
         worldview = await StorageApi.processor.worldview.get(keys)
+      // get worldview data from preset
+      if(!worldview && GRAPERANK_PRESETS[keys.context]) 
+        worldview = {graperank:GRAPERANK_PRESETS[keys.context]}
       // get list of calculated Grapevines from processor
       if(worldview){
-        worldview.grapevines = await getWorldviewGrapevines(keys as Required<WorldviewKeys>)
+        // worldview.grapevines = await getWorldviewGrapevines(keys as Required<WorldviewKeys>)
       }else{
         console.log('GrapeRank : Storage : no worldview provided and processor does not have worldview.get() function')
       }
@@ -164,7 +162,7 @@ export class StorageApi implements Required<StorageProcessor> {
       return undefined
     },
     // put grapevine scorecards
-    async put(keys : Required<GrapevineKeys>, data : ScorecardsRecord, overwrite? : boolean) {
+    async put(keys : Required<GrapevineKeys>, data : ScorecardsEntries, overwrite? : boolean) {
       if(StorageApi.processor.scorecards?.put) 
         return await StorageApi.processor.scorecards.put(keys, data)
       console.log('GrapeRank : Storage : processor does not have scorecards.put() function')
@@ -273,7 +271,7 @@ async function getCalculationTimestamps(type: 'grapevine' | 'scorecards', keys :
 
 
 
-const WORLDVIEW_PRESETS : Record<string,WorldviewSettings> = {
+const GRAPERANK_PRESETS : Record<string,GraperankSettings> = {
 
   [DEMO_CONTEXT] : {
     interpreters : [
@@ -289,7 +287,7 @@ const WORLDVIEW_PRESETS : Record<string,WorldviewSettings> = {
       }
     ],
     calculator : undefined,
-    input : undefined
+    keys : undefined
   },
 
   [DEFAULT_CONTEXT] : {
@@ -306,7 +304,7 @@ const WORLDVIEW_PRESETS : Record<string,WorldviewSettings> = {
       }
     ],
     calculator : undefined,
-    input : undefined
+    keys : undefined
   }
 
 }

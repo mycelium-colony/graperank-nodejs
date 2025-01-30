@@ -1,4 +1,4 @@
-export const DEBUGTARGET = ''
+// export const DEBUGTARGET = ''
 
 // Ivan@primal.net : DOS = 2?
 // export const DEBUGTARGET = '01ddee289b1a2e90874ca3428a7a414764a6cad1abfaa985c201e7aada16d38c'
@@ -7,7 +7,7 @@ export const DEBUGTARGET = ''
 // export const DEBUGTARGET = 'aae4c84cad11d11cadb19456daa7bec01fa30125c84b0e2725aeeec6271a1b15'
 
 // neo.metal : DOS = 5?
-// export const DEBUGTARGET = 'ae831ad395b98c6c2b8812eecb907c83fda1365e6eff79830eb475fa980bd549'
+export const DEBUGTARGET = 'ae831ad395b98c6c2b8812eecb907c83fda1365e6eff79830eb475fa980bd549'
 
 /**
  * Handle big arrays with care

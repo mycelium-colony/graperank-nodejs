@@ -1,9 +1,9 @@
-import type { CalculatorParams, CalculatorSums, elemId, GrapevineData, InterpreterResults, protocol, Rating, RatingsList, Scorecard, ScorecardData, ScorecardMeta, ScorecardsRecord, scoreindex, timestamp, userId, WorldviewCalculation, WorldviewKeys, WorldviewSettings } from "../types"
+import type { CalculatorParams, CalculatorSums, elemId, GrapevineData, protocol, Rating, RatingsList, Scorecard, ScorecardData, ScorecardMeta, scoreindex, timestamp, userId, GraperankCalculation, WorldviewKeys, GraperankSettings, ScorecardsEntries } from "../types"
 import { DEBUGTARGET } from "../utils"
 
 let keys : Required<WorldviewKeys>
 let calculator : Required<CalculatorParams>
-let settings : WorldviewSettings
+let settings : GraperankSettings
 let calctimestamp : timestamp
 let ratings : RatingsList 
 // const ratercards : Map<userId,Scorecard> = new Map()
@@ -17,7 +17,7 @@ const DefaultParams : Required<CalculatorParams> = {
   // CAUTION : too high (eg:.7) and users beyond a certain DOS (eg:2) will always have a score of zero
   rigor : .5,
   // minimum score ABOVE WHICH scorecard will be included in output
-  minscore : -1,
+  minscore : 0,
   // max difference between calculator iterations
   // ZERO == most precise
   precision : 0,
@@ -28,7 +28,7 @@ const DefaultParams : Required<CalculatorParams> = {
 /**
  * Calculate new scorecards from interpreted ratings and input scorecards
  */
-export function calculate ( R : RatingsList, K : Required<WorldviewKeys>, W : WorldviewSettings) : WorldviewCalculation {
+export function calculate ( R : RatingsList, K : Required<WorldviewKeys>, W : GraperankSettings) : GraperankCalculation {
 
   keys = K
   settings = W
@@ -38,7 +38,7 @@ export function calculate ( R : RatingsList, K : Required<WorldviewKeys>, W : Wo
     ...W.calculator
   }
   // let scorecards : Scorecard[] = []
-  console.log("GrapeRank : Calculator : instantiated with ",ratings.length," ratings.")
+  console.log("GrapeRank : Calculator : instantiated with ",ratings.length," ratings and params : ", calculator)
 
   // setup
   // STEP A : initialize ratee scorecard
@@ -62,14 +62,14 @@ export function calculate ( R : RatingsList, K : Required<WorldviewKeys>, W : Wo
   let calculated = iterate()
 
   // output
-  const calculationdata : WorldviewCalculation = {
-    timestamp : calctimestamp,
+  const calculationdata : Partial<GraperankCalculation> = {
+    keys : {...keys, timestamp: calctimestamp},
     grapevine : outputGrapevineData(),
-    scorecards : outputScorecardsData()
   }
+  console.log("GrapeRank : Calculator : output GraperankCalculation : ",calculationdata)
 
-  console.log("GrapeRank : Calculator : output WorldviewCalculation : ",{...keys, calctimestamp})
-  return calculationdata
+  calculationdata.scorecards = outputScorecardsData()
+  return calculationdata  as GraperankCalculation
 }
 
 
@@ -145,10 +145,12 @@ function iterate() : number {
 
 }
 
+
 function outputGrapevineData() : GrapevineData {
   // TODO set expires from calculator params at time of calculation 
   let expires = false
   let summary : Record<scoreindex, number>  = new Scoreindex()
+  let graperank : GraperankSettings = {...settings, calculator}
   calculators.forEach((calculator) => {
     if(calculator.output) {
       let scoreindex = Math.round(calculator.output[1].score * 100) as scoreindex
@@ -156,21 +158,19 @@ function outputGrapevineData() : GrapevineData {
       summary[scoreindex] = scorecount
     }
   })
-  return { summary, expires}
+  return { summary, expires, graperank}
 }
 
-function outputScorecardsData() : ScorecardsRecord {
-  let scorecards : Record<elemId, Required<ScorecardData>> = {}
+function outputScorecardsData() : ScorecardsEntries {
+  let scorecards : [elemId, Required<ScorecardData>][] = []
   calculators.forEach((calculator) => {
-    let output = calculator.output
-    if(output) {
-      scorecards[output[0]] = output[1]
-    }
+    scorecards.push(calculator.output)
   })
-  // return scorecards.sort((a ,b )=>{
-  //   return  b[1].score - a[1].score ||  b[1].input['nostr-follows']?.count - a[1].input['nostr-follows']?.count 
-  // })
-  return scorecards
+  // sort first : scorecards with higher scores and most ratings
+  return scorecards.sort((a ,b )=>{
+    return  a[1].score - b[1].score ||  a[1].meta['nostr-follows']?.numRatings - b[1].meta['nostr-follows']?.numRatings 
+  })
+  // return scorecards
 }
 
 
@@ -185,7 +185,7 @@ const zerosums : CalculatorSums = {
 class ScorecardCalculator {
 
   get output() : [elemId, Required<ScorecardData>] | undefined {
-    if(!this.calculated || this._data.score <= calculator.minscore) return undefined
+    if(!this.calculated || this._data.score < calculator.minscore) return undefined
     return [ this._subject, this._data ]
   }
   get scorecard() : Required<Scorecard> | undefined { 
@@ -374,15 +374,15 @@ function groupScorecardsByScore(scorecards : Scorecard[], increment : number ) :
 
 // STEP A : get rater influence from input scorecards
 // FIXME this will NOT WORK since input is NO LONGER a list of scorecards
-function getInputScorecard(subject : elemId) : Scorecard | undefined{
-  let scorecard : Scorecard | undefined = undefined
-  for(let s in settings.input){
-    if(subject == settings.input[s].subject) {
-      scorecard =  settings.input[s]
-    }
-  }
-  return scorecard
-}
+// function getInputScorecard(subject : elemId) : Scorecard | undefined{
+//   let scorecard : Scorecard | undefined = undefined
+//   for(let s in settings.keys){
+//     if(subject == settings.keys[s].subject) {
+//       scorecard =  settings.keys[s]
+//     }
+//   }
+//   return scorecard
+// }
 
 function getRating(rater:userId, ratings:RatingsList = []) : Rating | undefined{
   for(let r in ratings){
