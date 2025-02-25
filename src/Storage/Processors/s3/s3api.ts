@@ -3,13 +3,6 @@
 import { PutObjectCommand, GetObjectCommand, S3Client, ListObjectsCommand, type GetObjectCommandOutput, type PutObjectCommandOutput, type ListObjectsCommandOutput, S3ClientConfig } from '@aws-sdk/client-s3';
 import { s3secrets, StorageFileList } from '../../../types';
 
-// try{
-//   if(!env || !env.SPACES_REGION || !env.SPACES_ENDPOINT || !env.SPACES_KEY || !env.SPACES_SECRET || env.SPACES_BUCKET)
-//     throw('missing required ENV credentals for s3 client');
-// }catch(e){
-//   console.log('ERROR : ', e)
-// }
-
 export type S3FileList = {
   Key : string, 
   filenames : string[]
@@ -66,34 +59,38 @@ export class s3 {
     private static async send (op:'put', objectinput:S3ObjectInput) : Promise<PutObjectCommandOutput | undefined> 
     private static async send (op:'list', objectinput:S3ObjectInput) : Promise<ListObjectsCommandOutput | undefined> 
     private static async send (op:'get' | 'put' | 'list', objectinput:S3ObjectInput) : Promise<GetObjectCommandOutput | PutObjectCommandOutput | ListObjectsCommandOutput | undefined>  {
-      let data, result// : GetObjectCommandOutput | PutObjectCommandOutput | ListObjectsCommandOutput | undefined;
+      let data : GetObjectCommandOutput | PutObjectCommandOutput | ListObjectsCommandOutput | undefined;
+      let path : string
       try {
         // let command : GetObjectCommand | PutObjectCommand | ListObjectsCommand;
         switch(op){
           case 'get' : 
             if("Key" in objectinput) 
+            path = objectinput.Key as string
             data = await s3.client.send(new GetObjectCommand(objectinput as S3GetObjectInput)) as GetObjectCommandOutput
             break;
           case 'put' : 
             if("Key" in objectinput && "Body" in objectinput) 
+            path = objectinput.Key as string
             data = await s3.client.send(new PutObjectCommand(objectinput as S3PutObjectInput)) as PutObjectCommandOutput
             break;
           case 'list' : 
             if("Marker" in objectinput || "Prefix" in objectinput)
+            path = "Marker" in objectinput ? objectinput.Marker as string : objectinput.Prefix as string
             data = await s3.client.send(new ListObjectsCommand(objectinput as S3ListObjectsInput)) as ListObjectsCommandOutput
             break;
           default : throw('invalid command requested');
         }
         if(!data) throw('no data returned') 
-        console.log("Success s3.send('"+op+"') to : " +  objectinput.Bucket);
+        console.log("Success s3.send('"+op+"') to : " +  path);
         // console.log("s3.send() response : ", data);
-        return data;
-    } catch (err) {
-        console.log("ERROR s3.send('"+op+"') request failed: ", err);
-        console.log("s3.send('"+op+"') input : ", objectinput);
-        console.log("s3.send('"+op+"') response : ", data);
+      } catch (err) {
+        console.log("WARNING s3.send('"+op+"') request failed: ", path, err);
+        // console.log("s3.send('"+op+"') input : ", objectinput);
+        // console.log("s3.send('"+op+"') response : ", data);
         // throw('s3.send() request failed');
-    }
+      }
+      return data;
     }
 
     static async get(Key : string){
@@ -174,7 +171,7 @@ export class s3 {
           console.log('s3.list() found ', s3output.Contents.length, ' files matching :', Key);
           s3output.Contents.forEach((obj)=>{
             if("Key" in obj && typeof(obj.Key) == 'string') {
-              console.log('s3.list() file :  ', obj.Key);
+              // console.log('s3.list() file :  ', obj.Key);
               objid = (obj.Key as string).replace(Key,'').replace('.json','');
               filenames.push(objid)
               if(!s3output?.IsTruncated) next = objid;

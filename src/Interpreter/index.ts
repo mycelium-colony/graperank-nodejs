@@ -1,16 +1,18 @@
 import { Protocols } from "./protocols"
 import { forEachBigArray, DEBUGTARGET } from "../utils"
-import { ProtocolRequest, RatingsList, userId , protocol, InterpreterResults, ProtocolResponse, RatingsMap} from "../types"
+import { ProtocolRequest, RatingsList, userId , protocol, InterpreterResults, ProtocolResponse, RatingsMap, InterpreterProtocolStatus, GraperankSettings} from "../types"
+import { type GrapeRankGenerator } from ".."
 
-export async function interpret(raters:userId[], requests? : ProtocolRequest[] ) : Promise<InterpreterResults>{
-  const protocol = new Protocols()
-  let responses : ProtocolResponse[] = []
-  let ratings : RatingsList = []
+export async function interpret(this : GrapeRankGenerator, raters:userId[]) : Promise<InterpreterResults | undefined>{
+  var protocol = new Protocols()
+  var responses : ProtocolResponse[] = []
+  var ratings : RatingsList = []
+  var requests : ProtocolRequest[] = this.settings.interpreters
   // `allraters` map keys hold all raters added as input and between protocol requests
   // map value is the iteration number at which the rater was added
   // (this number ends up in the scorecard as `dos` from observer) 
   const allraters : Map<userId,number> = new Map()
-  let requestauthors : Set<userId> | undefined
+  var requestauthors : Set<userId> | undefined
 
   if(!!raters && !!requests){
     console.log("GrapeRank : interpret : instantiating ",requests.length, " protocols for ",raters.length," raters")
@@ -22,6 +24,7 @@ export async function interpret(raters:userId[], requests? : ProtocolRequest[] )
     // requests having `iterations` will ADD to `allraters` with each interation
     // each request will use the `allraters` list from previous requests
     for(let r in requests){
+      if(this.stopping) return undefined
       let requestindex = r as unknown as number
       let request = requests[requestindex]
       protocol.setRequest(request)
@@ -33,23 +36,48 @@ export async function interpret(raters:userId[], requests? : ProtocolRequest[] )
       let maxiterations : number = request.iterate || 1
       let thisiterationraters : Set<userId>
       if(request.authors && request.authors.length) requestauthors = new Set(request.authors)
-
+      
+      let currentstatus : InterpreterProtocolStatus
       console.log("GrapeRank : interpret : calling " +request.protocol+" protocol with params : ",protocol.get(request.protocol).params)
 
       while(thisiteration < maxiterations){
+        if(this.stopping) return undefined
         // increment for each protocol iteration
         thisiteration ++
-        thisiterationraters = requestauthors || ( newraters.size ?  newraters : new Set(allraters.keys()) )
-        console.log("GrapeRank : interpret : "+request.protocol+" protocol : begin iteration ", thisiteration, " of ", maxiterations,", with ",thisiterationraters.size," raters")
+        thisiterationraters = requestauthors || ( newraters?.size ?  newraters : new Set(allraters.keys()) )
+        console.log("GrapeRank : interpret : "+request.protocol+" protocol : begin iteration ", thisiteration, " of ", maxiterations,", with ",thisiterationraters?.size," raters")
         // DEBUG
         if(thisiterationraters.has(DEBUGTARGET))
           console.log('DEBUGTARGET : interpret : target found in thisiteration raters')
-
         try{
+          currentstatus = {
+            protocol : request.protocol,
+            // FIXME dos needs to be set on initial status ... 
+            // how to determine this acurately BEFORE fetchData() has been called?
+            dos : request.iterate ? protocol.get(request.protocol)?.fetched?.length || 0 : undefined,
+            authors : thisiterationraters.size
+          }
+          if(!await this.updateInterpreterStatus(currentstatus)) throw('failed updating initial status')
+          let fetchstart = Date.now()
           // fetch protocol specific dataset for requestauthors OR newraters OR allraters
           let dos = await protocol.fetchData(request.protocol, thisiterationraters)
+          // TODO cache fetched data
+          currentstatus.fetched = [
+              protocol.get(request.protocol).fetched[dos -1]?.size || 0, // number of fetched events
+              Date.now() - fetchstart, // duration of fetch request
+              thisiteration == maxiterations ? true : undefined // final DOS iteration ?
+            ]
+          if(!await this.updateInterpreterStatus(currentstatus)) throw('failed updating status after fetch')
+          let interpretstart = Date.now()
           // interpret fetched data and add to newratings
           newratings = await protocol.interpret(request.protocol, dos)
+          currentstatus.interpreted = [
+              countRatingsMap(newratings)|| 0, // number of interpretations rated
+              Date.now() - interpretstart, // duration of interpretation
+              thisiteration == maxiterations ? true : undefined // final DOS iteration ?
+            ]
+          if(!await this.updateInterpreterStatus(currentstatus)) throw('failed updating status after interpret')
+
           console.log("GrapeRank : interpret : ",request.protocol," protocol : interpretation complete for iteration ",thisiteration)
 
           // prepare for next iteration ONLY IF not on final iteration
@@ -58,8 +86,9 @@ export async function interpret(raters:userId[], requests? : ProtocolRequest[] )
             newraters = getNewRaters(newratings, allraters)
             // merge all raters to include new raters
             newraters.forEach((rater) => allraters.set(rater, thisiteration))
-            console.log("GrapeRank : interpret : "+request.protocol+" protocol : added " ,newraters.size, " new raters, for a total of ", allraters.size)
+            console.log("GrapeRank : interpret : "+request.protocol+" protocol : added " ,newraters.size, " new raters")
           }
+          console.log("GrapeRank : interpretat : total ", allraters.size," raters")
 
         }catch(e){
           console.log('GrapeRank : interpret : ERROR : ',e)
@@ -95,6 +124,8 @@ export async function interpret(raters:userId[], requests? : ProtocolRequest[] )
       console.log('DEBUGTARGET : interperet : found more than ONE rating for ', key)
     }) 
   
+  }else{
+    console.log('GrapeRank : ERROR in interpret() : no raterts && requests passed : ', raters, requests)
   }
   protocol.clear()
   return {ratings, responses}
@@ -105,9 +136,13 @@ export async function interpret(raters:userId[], requests? : ProtocolRequest[] )
 
 // FIXME this ONLY works when USERS are being rated, not CONTENT
 // TODO extraction of new authors from rated content SHOULD be handled by each protocol ...  
+
+// TODO some protocols, like `nostr-mutes` && `nostr-reports`, should NOT append new ratees to allraters 
+// the scorecards generated should ONLY include "those ratees within the [`nostr-follows`] network" ...
+// maybe there should be a designated protocol that "defines the set of new raters" ?
 function getNewRaters(newratings : RatingsMap, allraters? : Map<userId, number>) : Set<userId>{
   let newraters : Set<userId> = new Set()
-  newratings.forEach((rateemap)=>{
+  newratings.forEach((rateemap, rater)=>{
     rateemap.forEach((ratingdata, ratee)=>{
       if(!allraters || !allraters.has(ratee)) newraters.add(ratee)  
     })
@@ -130,4 +165,15 @@ function addToRatingsList(protocol : protocol, index : number, ratingsmap : Rati
       })
     })
   })
+}
+
+
+function countRatingsMap(ratingsmap : RatingsMap){
+  let count = 0
+  ratingsmap.forEach((rateemap)=>{
+    rateemap.forEach(()=>{
+      count ++
+    })
+  })
+  return count
 }

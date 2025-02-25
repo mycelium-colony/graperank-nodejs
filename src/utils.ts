@@ -31,6 +31,21 @@ export async function filterBigArray<T>(bigarray : T[], predicate: (value: T, in
   return filtered
 }
 
+export async function sortBigArray<T>(bigarray : T[], compareFn: (a: T, b: T) => number,  max = 1000) : Promise<T[]>{
+  const sorted : T[] = []
+  const slices = await sliceBigArray<T>(bigarray, max)
+  for(let s in slices){ 
+      await new Promise<T[]>( (resolve) => {
+        setTimeout( () => { resolve(
+          slices[s].sort(compareFn)
+        )}, 0 )
+      })
+      .then((subset)=> sorted.push(...subset))
+      .catch((e)=> console.log('GrapeRank : ERROR processing sortBigArray : ',e))
+  }
+  return sorted
+}
+
 export async function forEachBigArray<T>(bigarray : T[], callbackfn : (value: T, index: number, array: T[]) => void, thisArg? : any, max = 1000) : Promise<void>{
   const slices = await sliceBigArray<T>(bigarray, max)
   for(let s in slices){ 

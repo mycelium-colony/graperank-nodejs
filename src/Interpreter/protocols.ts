@@ -1,9 +1,8 @@
 // Export ALL module instances of Interpreter interface
 // as this[source][protocol]
 
-import { ProtocolParams, ProtocolRequest, RatingsMap, protocol, userId} from '../types'
+import { InterpretationProtocol, ProtocolParams, ProtocolRequest, RatingsMap, protocol, userId} from '../types'
 import { DEBUGTARGET } from '../utils'
-import { InterpretationProtocol, ProtocolFactory } from './classes'
 import { NostrProtocolFactory } from './Nostr'
 
 
@@ -15,8 +14,12 @@ export class Protocols extends Map<string, InterpretationProtocol<ProtocolParams
     })
   }
 
-  async setRequest(request:ProtocolRequest){
+  setRequest(request:ProtocolRequest){
     this.get(request.protocol).request = request
+  }
+
+  getParams(protocol){ 
+    return this.get(protocol).params
   }
 
   getInterpreted(protocol : protocol) : RatingsMap {

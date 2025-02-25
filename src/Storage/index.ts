@@ -1,18 +1,6 @@
-import { GrapevineData, WorldviewData, GrapevineKeys, WorldviewKeys, ScorecardKeys, ApiKeysTypes, ScorecardData, ApiOperation, ApiProcessor, ScorecardsRecord, ApiTypeName, GraperankSettings, DEMO_CONTEXT, DEFAULT_CONTEXT, Grapevine, StorageProcessor, StorageConfig, StorageSecrets, StorageFileList, ScorecardsEntries } from "../types"
+import { WorldviewData, GrapevineKeys, WorldviewKeys, DEFAULT_CONTEXT, StorageProcessor, StorageConfig, StorageSecrets, StorageFileList, Scorecards, ScorecardsEntry } from "../types"
 import { s3Processor } from "./Processors/s3"
 
-
-// // STORAGE DEMO
-// const s3storage = new Storage(new Processors.s3)
-// // get a specific worldview  for this observer 
-// // (with metadata for calculated grapevines)
-// s3storage.worldview.get({ observer:'mypubkey', context:'myworldview' })
-// // query all worldviews for this observer
-// s3storage.worldview.query((w)=> w.observer ==  'mypubkey')
-// // get latest (grapevine) scorecards calculated for a worldview
-// s3storage.scorecards.get({ observer:'mypubkey', context:'myworldview' })
-// // query all scorecards calculated for an observer and a subject
-// s3storage.scorecards.query((s) => s.observer == 'mypubkey' && s.subject == 'myfriendspubkey')
 
 export namespace StorageProcessors {
   export const s3 = s3Processor
@@ -67,14 +55,10 @@ export class StorageApi implements Required<StorageProcessor> {
       // get Worldview data from processor
       if(!!StorageApi.processor.worldview?.get)
         worldview = await StorageApi.processor.worldview.get(keys)
-      // get worldview data from preset
-      if(!worldview && GRAPERANK_PRESETS[keys.context]) 
-        worldview = {graperank:GRAPERANK_PRESETS[keys.context]}
-      // get list of calculated Grapevines from processor
       if(worldview){
-        // worldview.grapevines = await getWorldviewGrapevines(keys as Required<WorldviewKeys>)
+        // console.log('GrapeRank : Storage : found worldview : ', worldview)
       }else{
-        console.log('GrapeRank : Storage : no worldview provided and processor does not have worldview.get() function')
+        console.log('GrapeRank : Storage : no worldview exists OR processor does not have worldview.get() function')
       }
       return worldview
     },
@@ -89,69 +73,6 @@ export class StorageApi implements Required<StorageProcessor> {
     // },
   }
 
-  grapevine = {
-    // retrieve list from processor
-    async list(keys : GrapevineKeys, getall? : boolean){ 
-      if(StorageApi.processor.grapevine?.list)
-        return await StorageApi.processor.grapevine.list(keys, getall)
-      console.log('GrapeRank : Storage : processor does not have grapevine.list() function')
-      return undefined
-    },
-
-    // store the metadata and summary of a grapevine calculation 
-    async put(keys : Required<GrapevineKeys>, data : GrapevineData) {
-      // TODO validate worldview signature before writing results
-      // TODO require `timestamp` and deny overwriting to the same timestamp
-      // send to processor
-      if(!!StorageApi.processor.grapevine && StorageApi.processor.grapevine.put)
-        return await StorageApi.processor.grapevine.put(keys, data)
-      console.log('GrapeRank : Storage : processor does not have grapevine.put() function')
-      return undefined
-    },
-
-    // retrieve Grapevine summary and metadata as GrapevineData
-    async get(keys : GrapevineKeys) {
-      // get latest timestamp from filelist if none provided
-      if(!keys.timestamp && StorageApi.processor.grapevine) {
-        let timestamps = await getCalculationTimestamps('grapevine', keys)
-        keys.timestamp = timestamps[0] || undefined
-      }
-      if(keys.timestamp){
-        // get grapevine from processor
-        console.log('GrapeRank : StorageApi : calling processor.grapevine.get() with : ',keys)
-        if(StorageApi.processor.grapevine) 
-          return await StorageApi.processor.grapevine.get(keys)
-      }
-      console.log('GrapeRank : Storage : processor does not have grapevine.get() function')
-      return undefined
-    },
-  }
-
-  // scores = {
-
-  //   // retrieve list from processor
-  //   async list(keys : Partial<ApiKeysTypes>, getall? : boolean){ 
-  //     if(!!StorageApi.processor.scores?.list)
-  //       return StorageApi.processor.scores.list(keys, getall)
-  //     return undefined
-  //   },
-    
-  //   // retrieve scores from a grapevine calculation
-  //   async get(keys : ApiKeysTypes) {
-  //     if(!keys.observer) return undefined
-  //     if(!keys.context) return undefined
-  //     // get latest timestamp from filelist if none provided
-  //     if(!keys.timestamp && StorageApi.processor.grapevine) {
-  //       keys.timestamp = await getTimestampList(keys as Required<WorldviewKeys>)[0]
-  //     }
-  //     // get scores from processor ONLY if all keys are provided
-  //     if(keys.timestamp && StorageApi.processor.scores)
-  //       return StorageApi.processor.scores.get(keys)
-  //     return undefined
-  //   },
-
-  // }
-
   scorecards = {
 
     // retrieve list of userid from processor
@@ -162,7 +83,7 @@ export class StorageApi implements Required<StorageProcessor> {
       return undefined
     },
     // put grapevine scorecards
-    async put(keys : Required<GrapevineKeys>, data : ScorecardsEntries, overwrite? : boolean) {
+    async put(keys : Required<GrapevineKeys>, data : ScorecardsEntry[], overwrite? : boolean) {
       if(StorageApi.processor.scorecards?.put) 
         return await StorageApi.processor.scorecards.put(keys, data)
       console.log('GrapeRank : Storage : processor does not have scorecards.put() function')
@@ -201,35 +122,6 @@ export class StorageApi implements Required<StorageProcessor> {
  }
  
 
-//  async function apiFetch(request : Request){
-//   return await fetch(request)
-//   .then(async (response)=>{
-//     return JSON.parse( await response.json() )
-//   }).catch((reason)=>{
-//     throw(new Error(reason))
-//   })
-//  }
-
-async function getWorldviewGrapevines(worldviewkeys : Required<WorldviewKeys>, limit = 0) : Promise<Grapevine[]> {
-  let grapevines : Grapevine[] = []
-  if(StorageApi.controller.grapevine?.get) {
-    // get a list of timestamp identifiers for every calculated grapevine
-    let timestamps = await getCalculationTimestamps('grapevine', worldviewkeys)
-    // get individual grapevines up to limit
-    // TODO apply limit when retrieving timestamps from Storage.list()
-    for(let i in timestamps){
-      if(limit && i as unknown as number > limit) break
-      let timestamp = timestamps[i.toString()]
-      let grapevinedata : GrapevineData | undefined
-      // get data for each Grapevine from processor
-      if(timestamp) grapevinedata = await StorageApi.controller.grapevine.get({...worldviewkeys,timestamp})
-      // append grapevine keys and data to worldview.grapevines
-      if(grapevinedata) grapevines.push({...worldviewkeys, timestamp, ...grapevinedata})
-    }
-  }
-  return grapevines
-}
-
 const timestampregex = /\d{9,}/g
 async function getCalculationTimestamps(type: 'grapevine' | 'scorecards', keys : Required<WorldviewKeys>, index=0) : Promise<number[]>{
   let timestamplist : number[] = []
@@ -237,7 +129,7 @@ async function getCalculationTimestamps(type: 'grapevine' | 'scorecards', keys :
   if(StorageApi.controller[type]?.list){
     files = await StorageApi.controller[type].list(keys, true)
   }
-  console.log('GrapeRank : Storage : getCalculationTimestamps() retrieved files for ',type,' : ',files)
+  console.log('GrapeRank : Storage : getCalculationTimestamps() retrieved ',files.list.length,' files for ',type)
   if(files){
     files.list.forEach((filename)=>{
       timestamplist.push(filename as unknown as number)
@@ -247,64 +139,10 @@ async function getCalculationTimestamps(type: 'grapevine' | 'scorecards', keys :
     // sort list in chronological order (newest first)
     timestamplist.sort((a,b) => b-a)
   }
-  console.log('GrapeRank : Storage : getCalculationTimestamps() returned with : ',timestamplist)
+  console.log('GrapeRank : Storage : getCalculationTimestamps() returned with ',timestamplist[0],' newest in list of ',timestamplist.length,' timestamps')
   return timestamplist
 }
 
-// const scoreindexregex = /\d{1,}/g
-// async function getScoreindexList(keys : Required<ScorecardScoresKeys>, index=0) : Promise<number[]>{
-//   let scoreindexlist : number[] = []
-//   let filenamelist : string[] | undefined
-//   if(StorageApi.processor.scores?.list){
-//     filenamelist = await StorageApi.processor.scores.list(keys, true).then((files)=> files?.list)
-//   }
-//   if(filenamelist){
-//     filenamelist.forEach((filename)=>{
-//       let match = filename.match(scoreindexregex)
-//       if(match && match[index]) scoreindexlist.push(match[index] as unknown as number)
-//     })
-//     // sort list in descending order (top scores first)
-//     scoreindexlist.sort((a,b) => b-a)
-//   }
-//   return scoreindexlist
-// }
 
 
 
-const GRAPERANK_PRESETS : Record<string,GraperankSettings> = {
-
-  [DEMO_CONTEXT] : {
-    interpreters : [
-      {
-        protocol : "nostr-follows",
-        iterate : 6
-      },
-      {
-        protocol : "nostr-mutes",
-      },
-      {
-        protocol : "nostr-reports",
-      }
-    ],
-    calculator : undefined,
-    keys : undefined
-  },
-
-  [DEFAULT_CONTEXT] : {
-    interpreters : [
-      {
-        protocol : "nostr-follows",
-        iterate : 6
-      },
-      {
-        protocol : "nostr-mutes",
-      },
-      {
-        protocol : "nostr-reports",
-      }
-    ],
-    calculator : undefined,
-    keys : undefined
-  }
-
-}

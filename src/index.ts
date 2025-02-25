@@ -1,281 +1,381 @@
 import * as Calculator from "./Calculator";
 import * as Interpreter from "./Interpreter";
-import { StorageApi, StorageProcessors } from "./Storage";
-import { ApiDataTypes, ApiOperation, ApiTypeName, EngineRequest, GrapevineData, GrapevineKeys, RatingsList, Scorecard, ScorecardKeys, ScorecardsRecord, userId, GraperankCalculation, WorldviewData, WorldviewKeys, StorageFileList, StorageConfig, GraperankSettings, ScorecardsEntries, ApiResponse, ApiRequest, ApiOperationName, ProtocolRequest, protocol } from "./types";
-import { DEBUGTARGET } from "./utils";
+import { StorageApi } from "./Storage";
+import {GrapevineData, GrapevineKeys, userId, WorldviewOutput, WorldviewKeys, StorageConfig, GraperankSettings, Scorecards, ProtocolRequest, protocol, InterpreterProtocolStatus, CalculatorIterationStatus, WorldviewData, DEFAULT_CONTEXT, GraperankListener, GraperankNotification, sessionid, context, timestamp, ScorecardsOutput, WorldviewSettings, ScorecardsEntry } from "./types";
 
 
-// const storage = new StorageApi( new StorageProcessors.s3 )
+// GrapeRank class has static properties and methods 
+// to manage and persist GrapeRankEngine instances across client sessions
+export class GrapeRank {
+  private static instances : Map<userId, GrapeRankEngine> = new Map()
+  static init( observer : userId,  storage : StorageConfig ) : GrapeRankEngine {
+    console.log("GrapeRank : initializing engine for : ", observer)
+    let instance = this.instances.get(observer)
+    if(!instance) {
+      instance = new GrapeRankEngine(observer, storage)
+      this.instances.set(observer, instance)
+    }
+    return instance
+  }
+  static instance(observer : userId){
+    return this.instances.get(observer)
+  }
+}
 
 
-// export class GrapeRank implements ApiProcessor {
+// GrapeRankEngine should ONLY be instantiated by GrapeRank class
 
-//   constructor(
-//     private request : EngineRequest,
-//     private resetcache : boolean = false
-//   ){}
-
-//   worldview = {
-//     list : storage.worldview.list,
-//     get : storage.worldview.get,
-//     put : storage.worldview.put,
-//   }
+export class GrapeRankEngine {
+  readonly observer : userId
+  readonly storage : StorageApi 
+  private generator : GrapeRankGenerator
+  private listeners : Map<sessionid, GraperankListener> = new Map()
   
-//   scorecards = {
-//     get : resetcache ? storage.scorecards.get,
-//     put : storage.scorecards.put,
-//   }
-// }
-
-
-export class GrapeRank implements ApiOperation {
-  private storage : StorageApi 
-
-  // observer: userId;
-  // context: string;
-  // input?: GrapevineKeys
-  // interpreters: ProtocolRequest[];
-  // params: CalculatorParams;
-  // dev : DevParams;
-  // FIXME implement these properties
-  // grapevine: true | GrapevineFilter;
-  // subjects: userId;
-
-  get type() { 
-    let type : ApiTypeName | undefined
-    if(this.request.keys?.observer && this.request.type == 'worldview') 
-      type = this.request.type
-    if(this.request.keys?.context && this.request.type == 'worldview' || this.request.type == 'grapevine') 
-      type = this.request.type
-    if(this.request.keys?.timestamp && this.request.type == 'grapevine' || this.request.type == 'scorecards') 
-      type = this.request.type
-    if(this.request.keys?.subject && this.request.type == 'scorecards') 
-      type = this.request.type
-    return type
+  constructor( observer : userId, storage : StorageConfig ){
+    this.observer = observer
+    this.storage = new StorageApi( storage )
   }
 
-  get storagetype(){
-    if(this.type && this.storage[this.type])
-      return this.storage[this.type]
+  async contexts() : Promise<string[]> {
+    return (await this.storage.worldview.list({observer:this.observer})).list 
+  }
+
+  // returns worldview and kesy from specified or default context, if exists in storage
+  // `usedefault` will return default worldview data, if none found in storage
+  // otherwise returns `undefined`
+  async worldview(context?: context, update : boolean | WorldviewSettings = false) : Promise<WorldviewOutput | undefined> {
+    let keys : Required<WorldviewKeys> = {
+      observer : this.observer,
+      context : context || DEFAULT_CONTEXT
+    }
+    let worldview : WorldviewData
+    if(!update){
+      // retrieve worldview from storage
+      worldview = await this.storage.worldview.get(keys)
+      // OR create first worldview ... if DEFAULT does not exist
+      if(!worldview) worldview = keys.context == DEFAULT_CONTEXT ? WORLDVIEW_DEFAULT : undefined
+      // console.log('GrapeRank : worldview() retrieved : ',keys,worldview)
+    }else{
+      // create a new worldview with posibly custom settings
+      worldview = update === true ? WORLDVIEW_DEFAULT : { settings : update } 
+    }
+    // console.log('GrapeRank : worldview() returning : ',keys,worldview)
+    if(!worldview) return undefined
+    return { keys, worldview }
+  }
+
+  // get calculated scorecards
+  async scorecards(context?: context, timestamp : timestamp = 0) : Promise<ScorecardsOutput | undefined>{
+    context = context || DEFAULT_CONTEXT
+    if(!timestamp) {
+      let {worldview} = await this.worldview(context)
+      // get timestamp from `worldview.calculated`
+      timestamp = worldview.calculated 
+      // get timestamp from last `worldview.grapevines`
+      if(!timestamp && worldview.grapevines.length) {
+        timestamp = worldview.grapevines[worldview.grapevines.length -1][0] 
+      }
+    }
+    if(timestamp){
+      let keys : Required<GrapevineKeys> = { observer : this.observer, context, timestamp }
+      let scorecards = await this.storage.scorecards.get(keys)
+      if( scorecards) return {keys, scorecards}
+    }
     return undefined
   }
 
-  // get keys(){
-  //   if(!this.request.keys) return undefined
-  //   if(this.type === 'worldview')
-  //     return this.request.keys as WorldviewKeys
-  //   if(this.type === 'grapevine')
-  //     return this.request.keys as GrapevineKeys
-  //   if(this.type === 'scorecards')
-  //     return this.request.keys as ScorecardKeys
-  // }
+  async generate(context?: context, settings? : Partial<GraperankSettings>) : Promise<WorldviewOutput | undefined> {
+    let input = await this.worldview(context, true)
+    let stopped = this.generator ? await this.stopCalculating(input.keys.context) : true
+    if(!stopped) return undefined
+    this.generator = new GrapeRankGenerator(this, input, settings)
+    return await this.generator.generate()
+  }
 
-  // get data(){
-  //   if(!this.request.data) return undefined
-  //   if(this.type === 'worldview')
-  //     return this.request.data as WorldviewData
-  //   if(this.type === 'grapevine')
-  //     return this.request.data as GrapevineData
-  //   if(this.type === 'scorecards')
-  //     return this.request.data as ScorecardsRecord
-  // }
+  // handles notification for listeners across all instances of GrapeRank
+  notify(notification : GraperankNotification ){
+    this.listeners.forEach((listener,sessionid) => {
+      try{ 
+        listener(notification) 
+      }catch(e){
+        this.listeners.delete(sessionid)
+      }
+    })
+  }
+  
+  listen(sesionid : sessionid, callback : GraperankListener | false){
+    if(!callback) return this.listeners.delete(sesionid)
+    this.listeners.set(sesionid,callback)
+    if(this.listeners.get(sesionid)) return true
+    return false
+  }
+  
+  async stopCalculating(context?: context){
+    let stopped = this.generator ? await this.generator.stop() : true
+    console.log('GrapeRank : stopCalculating() : generator stopped : ',stopped)
+    let cleared = stopped ? await this.clearCalculating(context) : false
+    console.log('GrapeRank : stopCalculating() : worldview calculating cleared : ',cleared)
+    return cleared
+  }
+
+  private async clearCalculating(context?: context){
+    let keys : Required<WorldviewKeys> = {
+      observer : this.observer,
+      context : context || DEFAULT_CONTEXT
+    }
+    let worldview = await this.storage.worldview.get(keys)
+    if(!worldview?.calculating) return true
+    worldview.grapevines.pop()
+    worldview.calculating = undefined
+    return await this.storage.worldview.put(keys, worldview)
+  }
+
+  // TODO rebuild worldviews from existing (stored) scorecards
+  // IF worldview data was accidentally obliterated or lost ... 
+  private async rebuild(){
+
+  }
+
+}
+
+
+// generate 
+export class GrapeRankGenerator {
+
+  readonly keys : Required<GrapevineKeys>
+  private worldview : WorldviewData
+  private grapevine : GrapevineData
+  private scorecards : ScorecardsEntry[] | undefined
+  private _stopping : boolean
+  private _stopped : boolean
 
   constructor(
-    private request : EngineRequest,
-    storage : StorageConfig,
-    private recalculate : boolean = false,
+    private engine : GrapeRankEngine,
+    input : WorldviewOutput,
+    settings? : Partial<GraperankSettings>,
   ){
-    console.log("GrapeRank : initializing with EngineRequest : ",this.request)
-    this.storage = new StorageApi( storage )
-    
-    // if(!request.observer || request.observer === 'undefined') throw("GrapeRank : ERROR initializing : mssing observer")
-    // this.observer = request.observer
-    // if(!request.context || request.context === 'undefined') throw("GrapeRank : ERROR initializing : mssing context")
-    // this.context = request.context
-    // this.input = request.input || undefined
-    // this.interpreters = request.interpreters || []
-    // this.params = {...GrapeRank.params, ...request.params}
-    // this.dev = request.dev || {}
-  }
-
-  async list(type? : ApiTypeName) : Promise<ApiResponse> {
-    type = type || this.type
-    if(!type) return undefined // TODO log error
-    let response = this.newResponse('list')
-
-    switch(type){
-      case 'worldview' :
-        response.list = await this.storage.worldview.list(this.request.keys as WorldviewKeys)
-      case 'grapevine' :
-        response.list = await  this.storage.grapevine.list(this.request.keys as GrapevineKeys)
-      case 'scorecards' :
-        response.list = await  this.storage.scorecards.list(this.request.keys as ScorecardKeys)
-    }
-    response.status = response.list ? true : false
-    return response
-  }
-
-  async get(type? : ApiTypeName ) : Promise<ApiResponse> {
-    type = type || this.type
-    if(!type) return undefined
-    // TODO generate response status && messages
-    let response = this.newResponse('get')
-
-    switch(type){ 
-
-      case 'scorecards' :
-        // get scorecards from storage
-        if(!this.recalculate)
-          response.scorecards = await this.storage.scorecards.get(this.request.keys as GrapevineKeys)
-
-      case 'grapevine' :
-        // AND/OR get grapevine from storage
-        if((type == 'scorecards' && response.scorecards?.length) || !this.recalculate )
-          response.grapevine = await this.storage.grapevine.get(this.request.keys as GrapevineKeys)
-
-        // calculate (and store) grapevine and scorecards if NOT retrieved from storage
-        if(!response.grapevine){
-          let settings : GraperankSettings | undefined = this.request.data['graperank']
-          response = { ...response, ...await this.generate(settings) }
-        }
-
-      case 'worldview' :
-        // AND/OR get worldview from storage
-        response.worldview = await this.storage.worldview.get(this.request.keys as WorldviewKeys)
-    }
-    // if(response.scorecards[DEBUGTARGET]) console.log('DEBUGTARGET : GrapeRank returned target scorecard : ', data[DEBUGTARGET])
-    return response
-  }
-
-  async put(data : ApiDataTypes) : Promise<ApiResponse> {
-    let response = this.newResponse('put')
-
-    switch(this.type){
-      // do nothing for calculated data
-      case 'scorecards' :
-      case 'grapevine' :
-        break
-      // TODO update worldview
-      case 'worldview' :
-        break
-    }
-    return response
-  }
-
-  // calculate and store a new grapevine
-  private async generate(settings? : GraperankSettings, iteration? : number) : Promise<GraperankCalculation | undefined>{
-    // validate keys
-    let keys = settings?.keys
-    if(!keys && this.request.keys.observer && this.request.keys.context) {
-      keys = this.request.keys as Required<WorldviewKeys>
-    }
-    if(!keys) return undefined // TODO log error
-
-    let worldview = await this.storage.worldview.get(keys)
-
-    // get graperank settings from worldview
-    if(!settings){
-      // get graperank settings from worldview.graperank (default) 
-      // OR from the worldview.calculated grapevine
-      // OR from the latest calculated grapevine
-      settings = worldview.graperank || (await this.storage.grapevine.get({...keys, timestamp : worldview.calculated})).graperank
-    }
-    if(!settings) return undefined // TODO log error
-    
-    let ratercards : ScorecardsEntries | undefined
-
-    // TODO get ratercards from worldview input 
-    // either from storage OR by iteratively calling this funciton calculate() 
-    // if(data.input){
-    //   ratercards = await this.storage.scorecards.get(data.input)
-    //   // if scorecards are not stored... get worldview and calculate new scorecards
-    //   if(!ratercards ) {
-    //     iteration = iteration ? iteration + 1 : 1
-    //     let inputworldview = await this.storage.worldview.get(data.input)
-    //     if(inputworldview) ratercards = await this.generate(data.input, inputworldview, iteration)
-    //   }
-    //   // if STILL no ratercards, 
-    //   // TODO throw error
-    //   if(!ratercards) return undefined
-    // }
-
-    // Interpret ratings
-    const raters = this.getRaters(ratercards) || [keys.observer]
-    console.log("GrapeRank : calling interpret with " ,raters.length, " authors ...")
-    const interpeterresults = await Interpreter.interpret(raters, settings.interpreters)
-    const ratings : RatingsList = interpeterresults.ratings
-  
-    // Calculate scorecards
-    console.log("GrapeRank : calling calculate with "+ratings.length+" ratings... ")
-    const calculation = Calculator.calculate(ratings, keys, settings)
-
-    // write to storage
-    if(calculation) {
-      // Update worldview.calculated
-      if(worldview.overwrite !== false) {
-        worldview.calculated = calculation.keys.timestamp
-        await this.storage.worldview.put(keys, worldview)
+    this.worldview = input.worldview
+    this.keys = {
+      observer : input.keys.observer,
+      context : input.keys.context || DEFAULT_CONTEXT,
+      timestamp : 0
+    } 
+    this.grapevine = {
+      graperank : { ...GRAPERANK_DEFAULT, ...input.worldview.settings.graperank, ...settings },
+      status : {
+        completed : 0,
+        total : 0,
+        interpreter : [],
+        calculator : []
       }
-      // set grapevine expires
-      if(worldview.expiry) 
-        calculation.grapevine.expires = calculation.keys.timestamp + worldview.expiry
+    }
+  }
 
+  // get ratings() { return this.interpretations.ratings }
+  get completed() { return this.grapevine.status.completed }
+  
+  get settings() : GraperankSettings {
+    return this.grapevine.graperank //{...this.worldview?.settings?.graperank, ...this._settings }
+  }
+  set settings(settings : Partial<GraperankSettings>){
+    this.grapevine.graperank = {...this.grapevine.graperank, ...settings}
+  }
+  // update the Map of worldview.grapevines with new grapevine data
+  // and return sorted entries array worldview.grapevines
+  private get grapevines() : [number, GrapevineData][] {
+    let grapevines = new Map(this.worldview.grapevines)
+    grapevines.set(this.keys.timestamp, this.grapevine)
+    // sort newest timestamp is last in list
+    return [...grapevines].sort((a,b)=> a[0] - b[0] )
+  }
+
+  // async initWorldview() : Promise<WorldviewData> {
+  //   this.worldview = this.worldview || this.keys.context ? (await this.engine.worldview(this.keys.context)).worldview : WORLDVIEW_DEFAULT
+  //   return this.worldview
+  // }
+
+  async updateInterpreterStatus(newstatus : InterpreterProtocolStatus){
+    let updated = false
+    this.grapevine.status.interpreter.forEach((status)=>{
+      if(!updated && status.protocol == newstatus.protocol && status.dos == newstatus.dos ){
+        status = newstatus
+        updated = true
+      }
+    })
+    if(!updated) this.grapevine.status.interpreter.push(newstatus)
+    return await this.update('Interpretation updated for '+newstatus.protocol+ newstatus.dos ? '['+newstatus.dos+']' : '')
+  }
+
+  async updateCalculatorStatus(newstatus : CalculatorIterationStatus){
+    let iteration = this.grapevine.status.calculator.length
+    this.grapevine.status.calculator.push(newstatus)
+    return await this.update('Calculator iteration '+iteration+' complete')
+  }
+
+  // TODO retrieving final grapevine should finalize the status object
+  async updateCalculatorComplete() : Promise<GrapevineData | false> {
+    this.grapevine.status.completed = Date.now() - this.keys.timestamp
+    let finaliteration = this.grapevine.status.calculator[this.grapevine.status.calculator.length -1]
+    for(let dos in finaliteration){
+      this.grapevine.status.total += ((finaliteration[dos].calculated || 0) + (finaliteration[dos].uncalculated || 0))
+    }
+    if(await this.update('Calculation complete')) return this.grapevine
+    return false
+  }
+
+  private calculate = Calculator.calculate
+  private interpret = Interpreter.interpret
+
+  async generate(scorecards? : Scorecards | undefined) : Promise<WorldviewOutput | undefined> {
+    try{
+      this.keys.timestamp = Date.now()
+      // set worldcview.calculating
+      this.worldview.calculating = this.keys.timestamp
+      await this.update('Generating a new grapevine for : '+this.keys.context)
+
+      // Interpret ratings
+      const raters = getRaters(scorecards) || [this.keys.observer]
+      console.log("GrapeRank : calling interpret with " ,raters.length, " authors ...")
+
+      // initiate the interpretation and calculation engines to run in the background
+      // while writing status updates to the grapevine object in storage (via GrapeRankGenerator)
+      const interpretations = await this.interpret(raters) 
+      // const ratings : RatingsList = interpeterresults.ratings
+
+      if(this.stopping || !interpretations) throw('stopping')
+
+      // Calculate scorecards
+      console.log("GrapeRank : calling calculate with "+interpretations.ratings.length+" ratings... ")
+      this.scorecards = await this.calculate(interpretations.ratings)
+
+      if(this.stopping || !this.scorecards) throw('stopping')
+
+      // write to storage
+      // Update worldview calculating & calculated
+      if(this.grapevine.status?.completed) this.worldview.calculating = undefined
+      if(this.worldview.settings?.overwrite !== false) this.worldview.calculated = this.keys.timestamp
+
+      // set grapevine expires
+      if(this.worldview.settings?.expiry) 
+        this.grapevine.expires = this.keys.timestamp + this.worldview.settings.expiry
       // set graperank interpreters used for this grapevine
+      // TODO these interpreters should be added to `status` during interpretation phase to generate live updates 
       let interpreters : Map<protocol,ProtocolRequest> = new Map()
-      interpeterresults.responses.forEach((response)=>{
+      interpretations.responses.forEach((response)=>{
         interpreters.set(response.request.protocol, response.request)
       })
-      calculation.grapevine.graperank = {...calculation.grapevine.graperank, interpreters : [...interpreters.values()]}
-
-      // send new grapevine to storage
-      await this.storage.grapevine.put(calculation.keys, calculation.grapevine)
-      /// send new scorecards to storage
-      await this.storage.scorecards.put(calculation.keys, calculation.scorecards)
-
-      if(worldview.archive === false) {
-        // TODO delete old grapevines
+      this.grapevine.graperank = {
+        ...this.worldview.settings.graperank,
+        ...this.grapevine.graperank, 
+        interpreters : [...interpreters.values()]
       }
 
-    }
-    return {...calculation, worldview}
-  }
+      // send new scorecards to storage
+      // FIXME there MAY be some null or empty scorecard entries in this array 
+      // ... causing problems when converting to map on client side
+      await this.engine.storage.scorecards.put(this.keys, this.scorecards)
+      // send worldview (and grapevines) to storage 
+      await this.update('Grapevine scorecards have been generated.')
 
-  // export() : Scorecard[] {
-  //   let scorecards : Scorecard[] = []
-  //   if(this.scorecards){
-  //     for(let c in this.scorecards){
-  //       let exportcard : Scorecard = {
-  //         subject : this.scorecards[c].subject,
-  //         score : this.scorecards[c].score,
-  //         confidence : this.scorecards[c].confidence
-  //       }
-  //       scorecards.push(exportcard)
-  //     }
-  //   }
-  //   return scorecards
-  // }
-
-  // private get scores() : Scorecard[] {
-  //   let scores = this.request.input || []
-  // }
-
-  // private async getInputScorecards() : Promise<Scorecard[]> {
-  //   if(!this.input) return []
-  //   Storage.
-  // }
-
-  private getRaters(scorecards : ScorecardsEntries = []) : userId[] | undefined {
-    const raters : userId[] = []
-    scorecards.forEach((entry) => {
-      raters.push(entry[0])
-    })
-    return raters.length ? raters : undefined
-  }
-
-  private newResponse(op : ApiOperationName) : ApiResponse {
-    return {
-      op,
-      keys : this.request.keys,
+      if(this.worldview.settings?.archive === false) {
+        // TODO delete old grapevines
+      }
+      return { 
+        worldview : this.worldview, 
+        keys : this.keys 
+      }
+    }catch(e){
+      this._stopped = true
+      console.log('GrapeRank : generator stopped.',this.keys,e)
+      return undefined
     }
   }
+
+  private async update(message : string){
+    // assure that GrapeRank worldview OR default is loaded 
+    // await this.initWorldview()
+    if(this.stopping) throw('stopping')
+    let stored = false
+    this.worldview.grapevines = this.grapevines
+    stored = await this.engine.storage.worldview.put(this.keys, this.worldview)
+    if(stored) this.engine.notify({message, keys : this.keys, grapevine : this.grapevine})
+    return true
+  }
+
+
+  get stopping() { return this._stopping }
+  get stopped() { return this._stopped }
+
+  async stop(){
+    if(this.worldview.calculating) {
+      this._stopping = true
+      while(!this.stopped){
+        await new Promise( resolve => setTimeout(resolve,1000) )
+      }
+      return this.stopped
+    }
+    return true
+  }
+
+
+}
+
+
+function getRaters(scorecards : Scorecards = []) : userId[] | undefined {
+  const raters : userId[] = []
+  scorecards.forEach((entry) => {
+    raters.push(entry[0])
+  })
+  return raters.length ? raters : undefined
+}
+
+
+
+const GRAPERANK_DEFAULT : GraperankSettings = {
+  interpreters : [
+    {
+      protocol : "nostr-follows",
+      iterate : 6
+    },
+    {
+      protocol : "nostr-mutes",
+    },
+    {
+      protocol : "nostr-reports",
+    }
+  ],
+  calculator : {
+    // incrementally decrease influence weight
+    attenuation : .7,
+    // factor for calculating confidence 
+    // MUST be bellow 1 or confidence will ALWAYS be 0
+    // CAUTION : too high (eg:.7) and users beyond a certain DOS (eg:2) will always have a score of zero
+    rigor : .5,
+    // minimum score ABOVE WHICH scorecard will be included in output
+    minscore : 0,
+    // max difference between calculator iterations
+    // ZERO == most precise
+    precision : 0,
+    // devmode if off by default
+    devmode : false
+  },
+}
+
+const WORLDVIEW_DEFAULT : WorldviewData = {
+
+  // timestamp of preffered grapevine calculation
+  calculating : undefined,
+  // timestamp of preffered grapevine calculation
+  calculated : undefined,
+  settings : {
+    // overwrite 'calculated' timestamp when calculating new grapevine?
+    overwrite : true,
+    // retain historical grapevines when calculating new?
+    archive : true,
+    // duration for 'expires' timestamp of new grapevines from calculation time
+    expiry : undefined,
+    // default 'graperank' settings for new grapevine calculations
+    graperank : GRAPERANK_DEFAULT
+  }
+
 }

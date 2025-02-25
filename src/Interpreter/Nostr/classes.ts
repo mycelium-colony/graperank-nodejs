@@ -1,10 +1,9 @@
-import {InterpretationProtocol} from "../classes"
 import { Event as NostrEvent} from 'nostr-tools/core'
 import { Filter as NostrFilter} from 'nostr-tools/filter'
 import { SimplePool } from 'nostr-tools/pool'
 import { useWebSocketImplementation } from 'nostr-tools/pool'
 import { DEBUGTARGET, sliceBigArray} from "../../utils"
-import { elemId, ProtocolParams, ProtocolRequest, Rating, RatingData, RatingsMap, userId } from "../../types"
+import { elemId, InterpretationProtocol, ProtocolParams, ProtocolRequest, Rating, RatingData, RatingsMap, userId } from "../../types"
 import WebSocket from 'ws'
 import { npubEncode } from "nostr-tools/nip19"
 useWebSocketImplementation(WebSocket)
@@ -26,7 +25,9 @@ const relays = [
   "wss://nos.lol",
 ]
 
-const maxauthors = 500
+const maxauthors = 1000
+const delaybetweenfetches = 500 // milliceconds
+
 export type  NostrProtocolConfig<ParamsType extends ProtocolParams> = {
   kinds : number[],
   params : ParamsType,
@@ -108,15 +109,18 @@ export class NostrProtocol<ParamsType extends ProtocolParams> implements Interpr
     let promise : Promise<void>
 
     console.log("GrapeRank : nostr protocol : fetching events in ",authorslists.length, " requests for ",authors.size," raters")
-
-    for(let a in authorslists){
+    // send one relay request per `maxauthors` sized list of authors
+    for(let index in authorslists){
       let fetchfilter : NostrFilter = {
         ...this.request.filter, 
-        authors : authorslists[a] as string[],
+        authors : authorslists[index] as string[],
         kinds : this.kinds,
       }
-      promise = this.fetchEventsPromise(fetchfilter, fetchedSet, a as unknown as number)
-      promises.push(promise)
+      // delay between relay requests
+      await new Promise<void>((resolve)=>{
+        setTimeout(()=> resolve(), delaybetweenfetches)
+      })
+      promises.push(this.fetchEventsPromise(fetchfilter, fetchedSet, index  as unknown as number))
     }
     // wait for all promises to resolve
     await Promise.all(promises)

@@ -1,6 +1,6 @@
 {
   "name": "graperank-nodejs",
-  "version": "0.0.9",
+  "version": "0.1.0",
   "description": "A Nostr reccomedation engine, powered by Webs of Trust and grapes.",
   "main": "index.js",
   "scripts": {
