@@ -11,9 +11,9 @@ Explore the demo client at [My Grapevine](https://grapevine.my) get a taste of h
 
 > Soveregnty is respected when users have the freedom to choose ... and a variety of usefull choices.
 
-Not everyone wants or needs algorithms to provide them with reccomendations, however, the more Nostr scales (to global influence) the more clients and service providers will leverage automated tools for users to 'discover' new and interesting 'people' and 'content' across the network.
+Not everyone wants or needs algorithms to provide them with reccomendations. However, the more Nostr scales (to global influence) the more clients and service providers will leverage automated tools for users to 'discover' new and interesting 'people' and 'content' across the network.
 
-However, on Nostr, there's no central 'trust authotity'. Weeding out 'bots and bad actors' and providing usefull reccomendations is not so straighforward. Even 'crowd sourced' content moderation, at its core, requires some ability to differentiate 'trustworthy' opinions from spam.
+On Nostr, there's no central 'trust authotity'. Weeding out 'bots and bad actors' and providing usefull reccomendations is not so straighforward. Even 'crowd sourced' content moderation, at its core, requires some ability to differentiate 'trustworthy' opinions from spam.
 
 'Webs of Trust' solves this problem without requiring a central authority. It works by defining 'trustworthiness' relative to the end user, based on their own content and interactions (likes, follows, mutes, ect...). In this manner, soveregnty is respected when end users have the freedom to choose their own (favorite) reccomendation service for any client, from a wide variety of practical choices.
 
@@ -21,8 +21,8 @@ However, on Nostr, there's no central 'trust authotity'. Weeding out 'bots and b
 ## The GrapeRank Engine
 
 - **Avoids** the 'popularity contest' that favors influencers, by ranking ALL users on a capped 'weighted average' scale.
-- **Accepts** any 'kind' of content (follows, likes, mutes, ect...) to be ingested for calculating scores 
-- **Accepts** any 'source' of content (not JUST nostr) to be ingested for calculating scores
+- **Accepts** any 'kind' of content (follows, likes, mutes, ect...) for calculating scores 
+- **Accepts** any 'source' of content (not JUST nostr) for calculating scores
 - **Allows** any 'context' to be used for calculating 'trustowrthiness' in diferent cases. (not JUST web of trust)
 - **Allows** running 'asyncronos' calculations on the server, pushing status notifications to connected cleints.
 - **Accepts** any 'storage' backend to be plugged in, for easy integration with existing infrastructure.
