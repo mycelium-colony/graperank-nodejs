@@ -17,8 +17,10 @@ export class GrapeRank {
     }
     return instance
   }
-  static instance(observer : userId){
-    return this.instances.get(observer)
+
+  async observers(storageconfig : StorageConfig) : Promise<string[]> {
+    let storage =  new StorageApi(storageconfig)
+    return (await storage.observers.list()).list
   }
 }
 
@@ -346,11 +348,11 @@ const GRAPERANK_DEFAULT : GraperankSettings = {
   ],
   calculator : {
     // incrementally decrease influence weight
-    attenuation : .7,
+    attenuation : .5,
     // factor for calculating confidence 
     // MUST be bellow 1 or confidence will ALWAYS be 0
     // CAUTION : too high (eg:.7) and users beyond a certain DOS (eg:2) will always have a score of zero
-    rigor : .5,
+    rigor : .2,
     // minimum score ABOVE WHICH scorecard will be included in output
     minscore : 0,
     // max difference between calculator iterations

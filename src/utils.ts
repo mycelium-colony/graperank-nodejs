@@ -1,4 +1,4 @@
-// export const DEBUGTARGET = ''
+export const DEBUGTARGET = ''
 
 // Ivan@primal.net : DOS = 2?
 // export const DEBUGTARGET = '01ddee289b1a2e90874ca3428a7a414764a6cad1abfaa985c201e7aada16d38c'
@@ -7,7 +7,7 @@
 // export const DEBUGTARGET = 'aae4c84cad11d11cadb19456daa7bec01fa30125c84b0e2725aeeec6271a1b15'
 
 // neo.metal : DOS = 5?
-export const DEBUGTARGET = 'ae831ad395b98c6c2b8812eecb907c83fda1365e6eff79830eb475fa980bd549'
+// export const DEBUGTARGET = 'ae831ad395b98c6c2b8812eecb907c83fda1365e6eff79830eb475fa980bd549'
 
 /**
  * Handle big arrays with care
@@ -31,21 +31,6 @@ export async function filterBigArray<T>(bigarray : T[], predicate: (value: T, in
   return filtered
 }
 
-export async function sortBigArray<T>(bigarray : T[], compareFn: (a: T, b: T) => number,  max = 1000) : Promise<T[]>{
-  const sorted : T[] = []
-  const slices = await sliceBigArray<T>(bigarray, max)
-  for(let s in slices){ 
-      await new Promise<T[]>( (resolve) => {
-        setTimeout( () => { resolve(
-          slices[s].sort(compareFn)
-        )}, 0 )
-      })
-      .then((subset)=> sorted.push(...subset))
-      .catch((e)=> console.log('GrapeRank : ERROR processing sortBigArray : ',e))
-  }
-  return sorted
-}
-
 export async function forEachBigArray<T>(bigarray : T[], callbackfn : (value: T, index: number, array: T[]) => void, thisArg? : any, max = 1000) : Promise<void>{
   const slices = await sliceBigArray<T>(bigarray, max)
   for(let s in slices){ 
@@ -62,7 +47,7 @@ export async function mergeBigArrays<T>(array1 : T[], array2 : T[], max = 1000) 
   const merged : T[] = [...array1]
   const slices = await sliceBigArray<T>(array2, max)
   for(let s in slices){ 
-await new Promise<T[]>( (resolve) => {
+  await new Promise<T[]>( (resolve) => {
         setTimeout( () => { 
           resolve(slices[s]) 
         }, 0 )
@@ -92,6 +77,25 @@ export async function sliceBigArray<T>(array : T[], max = 1000) : Promise<T[][]>
   return sliced
 }
 
+
+export function scwartzianSortBigArray<T>(tobesorted : T[], sorter : SchwartzianSortFunctions<T>) : T[]{
+  // return await new Promise<T[]>( (resolve) => {
+  //   setTimeout( () => {
+      // sortables array holds objects with index and value of each element
+      var sortables = tobesorted.map(sorter.map)
+      // sort the sortables array 
+      sortables.sort(sorter.compare)
+      // copy element back to a new sorted array of elements
+      // resolve( sortables.map( sortable => tobesorted[sortable.index] ))
+    // }, 0 )
+  // })
+  return sortables.map( sortable => tobesorted[sortable.index] )
+}
+export type SchwartzianSortable = { index : number, value : number }
+export type SchwartzianSortFunctions<T> = {
+  map : (item : T, index : number) => SchwartzianSortable,
+  compare : (a: SchwartzianSortable, b: SchwartzianSortable) => number
+}
 
 
 
