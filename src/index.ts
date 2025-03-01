@@ -348,7 +348,7 @@ const GRAPERANK_DEFAULT : GraperankSettings = {
   ],
   calculator : {
     // incrementally decrease influence weight
-    attenuation : .5,
+    attenuation : .7,
     // factor for calculating confidence 
     // MUST be bellow 1 or confidence will ALWAYS be 0
     // CAUTION : too high (eg:.7) and users beyond a certain DOS (eg:2) will always have a score of zero
