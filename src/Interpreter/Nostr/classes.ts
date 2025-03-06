@@ -10,9 +10,9 @@ useWebSocketImplementation(WebSocket)
 
 const relays = [
   "wss://gv.rogue.earth",
-  "wss://purplepag.es",
-  "wss://relay.primal.net",
-  "wss://relay.damus.io",
+  // "wss://purplepag.es",
+  // "wss://relay.primal.net",
+  // "wss://relay.damus.io",
   // "wss://nostr-pub.wellorder.net",
   // "wss://relay.nostr.bg",
   "wss://nostr.bitcoiner.social",

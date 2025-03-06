@@ -1,7 +1,7 @@
 // Adapted apiS3.ts from nostrmeet.me
 // FIXME env depends on being run inside svelte 
 import { PutObjectCommand, GetObjectCommand, S3Client, ListObjectsCommand, type GetObjectCommandOutput, type PutObjectCommandOutput, type ListObjectsCommandOutput, S3ClientConfig } from '@aws-sdk/client-s3';
-import { s3secrets, StorageFileList } from '../../../types';
+import { s3Config, StorageFileList } from '../../types';
 
 export type S3FileList = {
   Key : string, 
@@ -27,38 +27,31 @@ export interface S3ListObjectsInput extends S3ObjectInput {
   Prefix? : string; // Limits the response to keys that begin with the specified prefix.
 }
 
-export class s3 {
-    static init(secrets: s3secrets) {
-      s3.config = {
+export class s3Api {
+    
+    private readonly bucket : string
+    private readonly client: S3Client | undefined;
+
+    constructor(config: s3Config) {
+      let clientconfig = {
         forcePathStyle: false, // Configures to use subdomain/virtual calling format.
-        region: secrets.region, // Must be "us-east-1" when creating new Spaces. Otherwise, use the region in your endpoint (for example, nyc3).
-        endpoint: secrets.endpoint, // Find your endpoint in the control panel, under Settings. Prepend "https://".
+        region: config.region, // Must be "us-east-1" when creating new Spaces. Otherwise, use the region in your endpoint (for example, nyc3).
+        endpoint: config.endpoint, // Find your endpoint in the control panel, under Settings. Prepend "https://".
         credentials: {
-            accessKeyId: secrets.key, // Access key pair. You can create access key pairs using the control panel or API.
-            secretAccessKey: secrets.secret // Secret access key defined through an environment variable.
+            accessKeyId: config.key, // Access key pair. You can create access key pairs using the control panel or API.
+            secretAccessKey: config.secret // Secret access key defined through an environment variable.
         }
       }
-      s3.bucket = secrets.bucket
-    }
-    private static config : S3ClientConfig
-    private static bucket : string
-    private static _client: S3Client | undefined;
+      this.client = new S3Client( clientconfig as any)
 
-    private static get client(){
-      if(s3._client){
-        return s3._client 
-      }else if(s3.config){
-        s3._client = new S3Client( s3.config as any)
-        return s3._client
-      }else{
-        throw('missing credentals required for s3 client');
-      }
+      if(!config.bucket) throw('missing bucket required for s3 client');
+      this.bucket = config.bucket
     }
 
-    private static async send (op:'get', objectinput:S3ObjectInput) : Promise<GetObjectCommandOutput | undefined> 
-    private static async send (op:'put', objectinput:S3ObjectInput) : Promise<PutObjectCommandOutput | undefined> 
-    private static async send (op:'list', objectinput:S3ObjectInput) : Promise<ListObjectsCommandOutput | undefined> 
-    private static async send (op:'get' | 'put' | 'list', objectinput:S3ObjectInput) : Promise<GetObjectCommandOutput | PutObjectCommandOutput | ListObjectsCommandOutput | undefined>  {
+    private async send (op:'get', objectinput:S3ObjectInput) : Promise<GetObjectCommandOutput | undefined> 
+    private async send (op:'put', objectinput:S3ObjectInput) : Promise<PutObjectCommandOutput | undefined> 
+    private async send (op:'list', objectinput:S3ObjectInput) : Promise<ListObjectsCommandOutput | undefined> 
+    private async send (op:'get' | 'put' | 'list', objectinput:S3ObjectInput) : Promise<GetObjectCommandOutput | PutObjectCommandOutput | ListObjectsCommandOutput | undefined>  {
       let data : GetObjectCommandOutput | PutObjectCommandOutput | ListObjectsCommandOutput | undefined;
       let path : string
       try {
@@ -67,17 +60,17 @@ export class s3 {
           case 'get' : 
             if("Key" in objectinput) 
             path = objectinput.Key as string
-            data = await s3.client.send(new GetObjectCommand(objectinput as S3GetObjectInput)) as GetObjectCommandOutput
+            data = await this.client.send(new GetObjectCommand(objectinput as S3GetObjectInput)) as GetObjectCommandOutput
             break;
           case 'put' : 
             if("Key" in objectinput && "Body" in objectinput) 
             path = objectinput.Key as string
-            data = await s3.client.send(new PutObjectCommand(objectinput as S3PutObjectInput)) as PutObjectCommandOutput
+            data = await this.client.send(new PutObjectCommand(objectinput as S3PutObjectInput)) as PutObjectCommandOutput
             break;
           case 'list' : 
             if("Marker" in objectinput || "Prefix" in objectinput)
             path = "Marker" in objectinput ? objectinput.Marker as string : objectinput.Prefix as string
-            data = await s3.client.send(new ListObjectsCommand(objectinput as S3ListObjectsInput)) as ListObjectsCommandOutput
+            data = await this.client.send(new ListObjectsCommand(objectinput as S3ListObjectsInput)) as ListObjectsCommandOutput
             break;
           default : throw('invalid command requested');
         }
@@ -93,12 +86,12 @@ export class s3 {
       return data;
     }
 
-    static async get(Key : string){
+    async get(Key : string){
         try{
-            if(!s3.bucket) throw('s3 Bucket not specified')
-            let input:S3GetObjectInput = { Bucket:s3.bucket, Key }
+            // if(!this.bucket) throw('s3 Bucket not specified')
+            let input:S3GetObjectInput = { Bucket:this.bucket, Key }
             // console.log('s3.get('+type+','+userid+','+objid+') calling s3.send() : ',input);
-            return  await s3.send('get',input).then(async output => {
+            return  await this.send('get',input).then(async output => {
               let getoutput = output as GetObjectCommandOutput | undefined;
               if(!getoutput) throw('not found')
               console.log('s3.get() output recieved from s3.send()')
@@ -111,10 +104,10 @@ export class s3 {
     }
 
     // validate data BEFORE sending to s3.put()
-    static async put(Key : string, data : any, overwrite = false){
+    async put(Key : string, data : any, overwrite = false){
       let input : S3PutObjectInput | undefined;
       try{
-        if(!s3.bucket) throw('s3 Bucket not specified')
+        if(!this.bucket) throw('s3 Bucket not specified')
           // confirm allowed overwrite
         if(!overwrite){
           let existing : boolean = await this.get(Key).then(data => {
@@ -128,14 +121,14 @@ export class s3 {
         }
         // send to storage
         input = {
-            Bucket:s3.bucket, Key,
+            Bucket:this.bucket, Key,
             Body : JSON.stringify(data),
             ACL : "private", 
             Metadata : {}
         }
         // console.log('s3.put() recieved apievent : ',apievent);
         // console.log('s3,put() passing command input to s3.send() : ',input);
-        return  await s3.send('put',input).then(() => true ).catch(() => false)
+        return  await this.send('put',input).then(() => true ).catch(() => false)
       }catch(e){
         console.log('unable to put data to storage : ', Key,e)
         // console.log('InputObject : ',input)
@@ -151,19 +144,19 @@ export class s3 {
      * @param userid 
      * @returns s3ListObjectOutput {IsTruncated : boolean, Keys : string[]}
      */
-    static async list(Key: string) : Promise<StorageFileList | undefined>{
+    async list(Key: string) : Promise<StorageFileList | undefined>{
       let input : S3ListObjectsInput | undefined;
       let output : StorageFileList;
       try{
-        if(!s3.bucket) throw('s3 Bucket not specified')
+        if(!this.bucket) throw('s3 Bucket not specified')
           if(!Key.endsWith('/')) Key = Key + '/';
         let filenames : string[] = [];
         input = {
-            Bucket : s3.bucket, 
+            Bucket : this.bucket, 
             Marker : Key, 
             Prefix : Key, 
         }
-        output =  await s3.send('list',input).then(s3 => {
+        output =  await this.send('list',input).then(s3 => {
           let s3output = s3 as ListObjectsCommandOutput | undefined;
           if(!s3output) throw('not found')
           if(!s3output.Contents) throw('no list content');

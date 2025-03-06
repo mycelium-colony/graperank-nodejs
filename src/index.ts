@@ -1,14 +1,21 @@
 import * as Calculator from "./Calculator";
 import * as Interpreter from "./Interpreter";
-import { StorageApi } from "./Storage";
-import {GrapevineData, GrapevineKeys, userId, WorldviewOutput, WorldviewKeys, StorageConfig, GraperankSettings, Scorecards, ProtocolRequest, protocol, InterpreterProtocolStatus, CalculatorIterationStatus, WorldviewData, DEFAULT_CONTEXT, GraperankListener, GraperankNotification, sessionid, context, timestamp, ScorecardsOutput, WorldviewSettings, ScorecardsEntry } from "./types";
+import { Storage } from "./Storage";
+import {GrapevineData, GrapevineKeys, userId, WorldviewOutput, WorldviewKeys, StorageParams, GraperankSettings, Scorecards, ProtocolRequest, protocol, InterpreterProtocolStatus, CalculatorIterationStatus, WorldviewData, DEFAULT_CONTEXT, GraperankListener, GraperankNotification, sessionid, context, timestamp, ScorecardsOutput, WorldviewSettings, ScorecardsEntry, StorageProcessor, elemId } from "./types";
 
 
 // GrapeRank class has static properties and methods 
 // to manage and persist GrapeRankEngine instances across client sessions
 export class GrapeRank {
   private static instances : Map<userId, GrapeRankEngine> = new Map()
-  static init( observer : userId,  storage : StorageConfig ) : GrapeRankEngine {
+  
+  static init( observer : userId,  storage : StorageParams ) : GrapeRankEngine {
+    const ODELL_PUBKEY = '04c915daefee38317fa734444acee390a8269fe5810b2241e5e6dd343dfbecc9'
+    if(!this.instances.has(ODELL_PUBKEY)){
+      const ODELL_ENGINE = new GrapeRankEngine(ODELL_PUBKEY, storage)
+      this.instances.set(ODELL_PUBKEY, ODELL_ENGINE)
+    }
+
     console.log("GrapeRank : initializing engine for : ", observer)
     let instance = this.instances.get(observer)
     if(!instance) {
@@ -18,8 +25,8 @@ export class GrapeRank {
     return instance
   }
 
-  async observers(storageconfig : StorageConfig) : Promise<string[]> {
-    let storage =  new StorageApi(storageconfig)
+  static async observers(storageconfig : StorageParams) : Promise<string[]> {
+    let storage =  Storage.init(storageconfig)
     return (await storage.observers.list()).list
   }
 }
@@ -28,42 +35,53 @@ export class GrapeRank {
 // GrapeRankEngine should ONLY be instantiated by GrapeRank class
 
 export class GrapeRankEngine {
-  readonly observer : userId
-  readonly storage : StorageApi 
-  private generator : GrapeRankGenerator
-  private listeners : Map<sessionid, GraperankListener> = new Map()
-  
-  constructor( observer : userId, storage : StorageConfig ){
-    this.observer = observer
-    this.storage = new StorageApi( storage )
+  readonly observer: userId;
+  readonly storage: StorageProcessor;
+  private generator: GrapeRankGenerator;
+  private listeners: Map<sessionid, GraperankListener> = new Map();
+
+  constructor(observer: userId, storageconfig: StorageParams) {
+    this.observer = observer;
+    this.storage = Storage.init(storageconfig);
   }
 
   async contexts() : Promise<string[]> {
     return (await this.storage.worldview.list({observer:this.observer})).list 
   }
 
-  // returns worldview and kesy from specified or default context, if exists in storage
-  // `usedefault` will return default worldview data, if none found in storage
-  // otherwise returns `undefined`
+  // returns worldview and keys from specified or default context
   async worldview(context?: context, update : boolean | WorldviewSettings = false) : Promise<WorldviewOutput | undefined> {
     let keys : Required<WorldviewKeys> = {
       observer : this.observer,
       context : context || DEFAULT_CONTEXT
     }
+    console.log('GrapeRankEngine : worldview() : keys : ', keys);
+
     let worldview : WorldviewData
     if(!update){
       // retrieve worldview from storage
       worldview = await this.storage.worldview.get(keys)
+      console.log('GrapeRankEngine : worldview() : retrieved worldview : ', worldview);
       // OR create first worldview ... if DEFAULT does not exist
-      if(!worldview) worldview = keys.context == DEFAULT_CONTEXT ? WORLDVIEW_DEFAULT : undefined
-      // console.log('GrapeRank : worldview() retrieved : ',keys,worldview)
+      if(!worldview) {
+        // MUST deconstruct the WORLDVIEW_DEFAULT object 
+        worldview = keys.context == DEFAULT_CONTEXT ? {...WORLDVIEW_DEFAULT} : undefined;
+        console.log('GrapeRankEngine : worldview() : default worldview : ', worldview);
+      }
     }else{
-      // create a new worldview with posibly custom settings
-      worldview = update === true ? WORLDVIEW_DEFAULT : { settings : update } 
+      // create a new worldview with possibly custom settings
+      // MUST deconstruct the WORLDVIEW_DEFAULT object 
+      worldview = update === true ? {...WORLDVIEW_DEFAULT} : { settings: update };
+      console.log('GrapeRankEngine : worldview() : new worldview : ', worldview);
     }
-    // console.log('GrapeRank : worldview() returning : ',keys,worldview)
-    if(!worldview) return undefined
-    return { keys, worldview }
+
+    if(!worldview) {
+      console.log('GrapeRankEngine : worldview() : no worldview found or created');
+      return undefined;
+    }
+
+    console.log('GrapeRankEngine : worldview() : returning worldview : ', { keys, worldview });
+    return { keys, worldview };
   }
 
   // get calculated scorecards
@@ -147,6 +165,7 @@ export class GrapeRankGenerator {
   readonly keys : Required<GrapevineKeys>
   private worldview : WorldviewData
   private grapevine : GrapevineData
+  readonly calculators : Map<elemId,Calculator.ScorecardCalculator> = new Map()
   private scorecards : ScorecardsEntry[] | undefined
   private _stopping : boolean
   private _stopped : boolean
@@ -332,7 +351,8 @@ function getRaters(scorecards : Scorecards = []) : userId[] | undefined {
 }
 
 
-
+// MUST deconstruct the GRAPERANK_DEFAULT object when used
+// OTHERWISE updated properties will persist across engine instances
 const GRAPERANK_DEFAULT : GraperankSettings = {
   interpreters : [
     {
@@ -363,12 +383,14 @@ const GRAPERANK_DEFAULT : GraperankSettings = {
   },
 }
 
+// MUST deconstruct the WORLDVIEW_DEFAULT object when used
+// OTHERWISE updated properties will persist across engine instances
 const WORLDVIEW_DEFAULT : WorldviewData = {
 
   // timestamp of preffered grapevine calculation
-  calculating : undefined,
+  // calculating : undefined,
   // timestamp of preffered grapevine calculation
-  calculated : undefined,
+  // calculated : undefined,
   settings : {
     // overwrite 'calculated' timestamp when calculating new grapevine?
     overwrite : true,
@@ -377,7 +399,7 @@ const WORLDVIEW_DEFAULT : WorldviewData = {
     // duration for 'expires' timestamp of new grapevines from calculation time
     expiry : undefined,
     // default 'graperank' settings for new grapevine calculations
-    graperank : GRAPERANK_DEFAULT
+    graperank : {...GRAPERANK_DEFAULT}
   }
 
 }

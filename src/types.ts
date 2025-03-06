@@ -177,16 +177,16 @@ export type ScorecardsEntry = [elemId, ScorecardData]
 export type StorageType =  'worldview' | 'scorecards' 
 
 // configure the storage engine upon instantiation
-export type StorageConfig = {
+export type StorageParams = {
   // provide a string to reference an existing implmentation StorageProcessor
   // or provide reference to a new StorageProcessor implmentation
   processor : string | StorageProcessor
   // provide credentials and other info needed by the storage backend
-  secrets : StorageSecrets
+  config : StorageConfig
 }
 
-export type StorageSecrets = {}
-export interface s3secrets extends StorageSecrets {
+export type StorageConfig = {} // ParamsObject
+export interface s3Config extends StorageConfig {
   region : string,
   endpoint : string,
   key : string,
@@ -204,15 +204,18 @@ export interface StorageOperations<KeysType , DataType>  {
   delete? : (keys: Partial<KeysType>, deleteall? : boolean) => Promise<boolean>
 } 
 
-export interface StorageProcessor {
-init : (secrets? : object) => void
+export abstract class StorageProcessor {
+constructor (config : StorageConfig) {}
+
+// retrieve a list of all observers
+observers : { list? : () => Promise< StorageFileList | undefined>}
 
 // store and retrieve worldview settings for calculating a grapevine
 // as well as the details of each grapevine calculation
-worldview? : StorageOperations<WorldviewKeys, WorldviewData>,
+worldview : StorageOperations<WorldviewKeys, WorldviewData>
 
 // query to return FULL scorecards from ANY grapevine
-scorecards? : StorageOperations<GrapevineKeys, ScorecardsEntry[]>
+scorecards : StorageOperations<GrapevineKeys, ScorecardsEntry[]>
 
 // for interpreter protocols to cache fetched data 
 // interpretercache? : StorageOperations<InterpreterCacheKeys, any>

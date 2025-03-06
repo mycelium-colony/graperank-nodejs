@@ -2,8 +2,7 @@ import { type GrapeRankGenerator } from ".."
 import type { CalculatorParams, CalculatorSums, elemId, protocol, Rating, RatingsList, Scorecard, ScorecardData, ScorecardInterpretation, scoreindex, userId, Scorecards, CalculatorIterationStatus, GrapevineKeys, ScorecardsEntry } from "../types"
 import { DEBUGTARGET } from "../utils"
 
-var params : Required<CalculatorParams>
-var calculators : Map<elemId,ScorecardCalculator> = new Map()
+// var params : Required<CalculatorParams>
 
 var DefaultParams : Required<CalculatorParams> = {
   // incrementally decrease influence weight
@@ -26,10 +25,7 @@ var DefaultParams : Required<CalculatorParams> = {
  */
 export async function calculate ( this : GrapeRankGenerator, ratings : RatingsList) : Promise<ScorecardsEntry[]> {
   var scorecards : ScorecardsEntry[]
-  // keys = K
-  params = {...DefaultParams, ...this.settings.calculator} 
-  // settings.calculator = {...DefaultParams, ...settings.calculator}
-  // ratings = R
+  let params : Required<CalculatorParams> = {...DefaultParams, ...this.settings.calculator} 
   this.settings = {calculator : {...params}}
 
   console.log("GrapeRank : Calculator : instantiated with ",ratings.length," ratings and params : ", params)
@@ -40,14 +36,14 @@ export async function calculate ( this : GrapeRankGenerator, ratings : RatingsLi
   for(let r in ratings){
     let ratee = ratings[r].ratee
     let rater = ratings[r].rater
-    if(ratee && !calculators.get(ratee)){
+    if(ratee && !this.calculators.get(ratee)){
       // TODO get scores for each rater from worldview input cards
       // let ratercard = getInputScorecard(rater as string)
-      let calculator = new ScorecardCalculator( this.keys, ratee )
-      if(calculator) calculators.set(ratee, calculator)
+      let calculator = new ScorecardCalculator( this.keys, ratee , params)
+      if(calculator) this.calculators.set(ratee, calculator)
     }
   }
-  console.log("GrapeRank : Calculator : setup with ",calculators.size," calculators.")
+  console.log("GrapeRank : Calculator : setup with ",this.calculators.size," calculators.")
   // if(!calculators.has(keys.observer as string))
   //   throw('GrapeRank : Calculator : missing oberver calculator')
 
@@ -59,7 +55,7 @@ export async function calculate ( this : GrapeRankGenerator, ratings : RatingsLi
   
   // console.log("GrapeRank : Calculator : output GeneratorOutput : ",this.keys, this.grapevine)
 
-  scorecards = outputScorecardsData()
+  scorecards = outputScorecardsData(this)
 
   return scorecards
 }
@@ -77,7 +73,7 @@ async function iterate(generator : GrapeRankGenerator, ratings : RatingsList ) :
   let iterationscores : number[] = []
   let iterationstatus : CalculatorIterationStatus
 
-  while(calculated < calculators.size){
+  while(calculated < generator.calculators.size){
     if(generator.stopped) return undefined
     iteration ++
     prevcalculating = calculating
@@ -91,8 +87,8 @@ async function iterate(generator : GrapeRankGenerator, ratings : RatingsList ) :
     // STEP B : calculate sums
     // Add rater's rating to the sum of weights & products for the ratee scorecard
     for(let r in ratings){
-      let calculator = calculators.get(ratings[r].ratee)
-      let ratercard = calculators.get(ratings[r].rater as string)?.scorecard
+      let calculator = generator.calculators.get(ratings[r].ratee)
+      let ratercard = generator.calculators.get(ratings[r].rater as string)?.scorecard
       if(calculator) {
         calculator.sum( ratings[r], ratercard)
       }
@@ -101,7 +97,7 @@ async function iterate(generator : GrapeRankGenerator, ratings : RatingsList ) :
     // STEP C : calculate influence
     // calculate final influence and confidence for each ratee scorecard
     // call calculate again if calculation is NOT complete
-    calculators.forEach( (calculator, rater) => {
+    generator.calculators.forEach( (calculator, rater) => {
       var dos = calculator.dos || 0
       iterationstatus[dos] = iterationstatus[dos] || {
         calculated : 0,
@@ -131,9 +127,9 @@ async function iterate(generator : GrapeRankGenerator, ratings : RatingsList ) :
     await generator.updateCalculatorStatus({...iterationstatus})
 
     // LOG iteration
-    iterationscores = logScoresForIteration()
+    iterationscores = logScoresForIteration(generator)
 
-    console.log("TOTAL number scorecards : ", calculators.size )  
+    console.log("TOTAL number scorecards : ", generator.calculators.size )  
     console.log("TOTAL scorecards calculating this iteration : ", calculating)
     console.log("TOTAL scorecards calculated : ", calculated)
     // halt iterator if needed
@@ -143,12 +139,12 @@ async function iterate(generator : GrapeRankGenerator, ratings : RatingsList ) :
         console.log("WARNING ",notcalculatedwarning," : scores did not change for ", calculating," scorecards in calculate()")
         if(notcalculatedwarning > 4) {
           console.log("HALTING iterator : due to unchanging scores for the following raters : ", uncalculated)
-          calculated = calculators.size
+          calculated = generator.calculators.size
         }
       }
       if(iteration > 100){
         console.log("HALTING iterator : exeded MAX 100 iterations in calculate() ")
-        calculated = calculators.size
+        calculated = generator.calculators.size
       }
     }
     console.log("------------ END ITERATION : ", iteration, " --------------------")
@@ -158,9 +154,9 @@ async function iterate(generator : GrapeRankGenerator, ratings : RatingsList ) :
 }
 
 
-function outputScorecardsData() : ScorecardsEntry[] {
+function outputScorecardsData(generator : GrapeRankGenerator) : ScorecardsEntry[] {
   let scorecards : [elemId, Required<ScorecardData>][] = []
-  calculators.forEach((calculator) => {
+  generator.calculators.forEach((calculator) => {
     scorecards.push(calculator.output)
   })
   // sort first : scorecards with higher scores and most ratings
@@ -179,10 +175,10 @@ const zerosums : CalculatorSums = {
 /**
  * Calculates a single scorecard for a given subject (ratee)
  */
-class ScorecardCalculator {
+export class ScorecardCalculator {
 
   get output() : [elemId, Required<ScorecardData>] | undefined {
-    if(!this.calculated || this._data.score < params.minscore) return undefined
+    if(!this.calculated || this._data.score < this.params.minscore) return undefined
     return [ this._subject, this._data ]
   }
   get scorecard() : Required<Scorecard> | undefined { 
@@ -210,7 +206,7 @@ class ScorecardCalculator {
   }
   // constructor(subject : elemId)
   // constructor(scorecard : Scorecard)
-  constructor(private keys : Required<GrapevineKeys>, input : elemId | Scorecard){
+  constructor(private keys : Required<GrapevineKeys>, input : elemId | Scorecard, private params : Required<CalculatorParams>){
       // input is subject of new scorecard
       this._subject = typeof input == 'string' ?  input :  input.subject as string
   }
@@ -235,7 +231,7 @@ class ScorecardCalculator {
     let weight = influence * rating.confidence; 
     // no attenuation for observer
     if (rating.rater != this.keys.observer) 
-      weight = weight * (params.attenuation);
+      weight = weight * (this.params.attenuation);
 
     // add to sums
     this._sums.weights += weight
@@ -297,7 +293,7 @@ class ScorecardCalculator {
     // determine if calculator iterations are complete based on calculator.precision
     // ONLY after scores have been calculated at least ONCE (if `this._claculated` has been set)
     this._calculated = this._calculated === undefined ? false 
-      : Math.abs(score - this._data.score) <= params.precision ? true : false
+      : Math.abs(score - this._data.score) <= this.params.precision ? true : false
 
     // zero the sums
     this._sums  = {...zerosums};
@@ -319,7 +315,7 @@ class ScorecardCalculator {
   // STEP D : calculate confidence
   private get confidence(){
     // TODO get default rigor
-    let rigor = params.rigor !== undefined ? params.rigor : .25
+    let rigor = this.params.rigor !== undefined ? this.params.rigor : .25
     const rigority = -Math.log(rigor)
     const fooB = -this._sums.weights * rigority
     const fooA = Math.exp(fooB)
@@ -331,14 +327,14 @@ class ScorecardCalculator {
 
 
 // LOG iteration
-function logScoresForIteration() : number[] {
+function logScoresForIteration(generator : GrapeRankGenerator) : number[] {
 
     let scorecards : Scorecard[] = [] 
     let increment  = .1
     let scores : number[] 
     let v = "", ov = ""
 
-    calculators.forEach((calculator) => {
+    generator.calculators.forEach((calculator) => {
       if(calculator.scorecard) scorecards.push( calculator.scorecard)
     })
 
