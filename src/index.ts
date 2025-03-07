@@ -9,17 +9,11 @@ import {GrapevineData, GrapevineKeys, userId, WorldviewOutput, WorldviewKeys, St
 export class GrapeRank {
   private static instances : Map<userId, GrapeRankEngine> = new Map()
   
-  static init( observer : userId,  storage : StorageParams ) : GrapeRankEngine {
-    const ODELL_PUBKEY = '04c915daefee38317fa734444acee390a8269fe5810b2241e5e6dd343dfbecc9'
-    if(!this.instances.has(ODELL_PUBKEY)){
-      const ODELL_ENGINE = new GrapeRankEngine(ODELL_PUBKEY, storage)
-      this.instances.set(ODELL_PUBKEY, ODELL_ENGINE)
-    }
-
+  static init( observer : userId,  storageparams : StorageParams ) : GrapeRankEngine {
     console.log("GrapeRank : initializing engine for : ", observer)
     let instance = this.instances.get(observer)
     if(!instance) {
-      instance = new GrapeRankEngine(observer, storage)
+      instance = new GrapeRankEngine(observer, storageparams)
       this.instances.set(observer, instance)
     }
     return instance
@@ -40,9 +34,9 @@ export class GrapeRankEngine {
   private generator: GrapeRankGenerator;
   private listeners: Map<sessionid, GraperankListener> = new Map();
 
-  constructor(observer: userId, storageconfig: StorageParams) {
+  constructor(observer: userId, storageparams: StorageParams) {
     this.observer = observer;
-    this.storage = Storage.init(storageconfig);
+    this.storage = Storage.init(storageparams);
   }
 
   async contexts() : Promise<string[]> {

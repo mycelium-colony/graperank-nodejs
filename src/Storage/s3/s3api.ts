@@ -33,6 +33,7 @@ export class s3Api {
     private readonly client: S3Client | undefined;
 
     constructor(config: s3Config) {
+      if(!config) throw('GrapeRank : Storage : missing config required for s3 client');
       let clientconfig = {
         forcePathStyle: false, // Configures to use subdomain/virtual calling format.
         region: config.region, // Must be "us-east-1" when creating new Spaces. Otherwise, use the region in your endpoint (for example, nyc3).

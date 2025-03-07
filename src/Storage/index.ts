@@ -7,14 +7,15 @@ export namespace StorageProcessors {
 
 export class Storage {
 
-  static init(config: StorageParams) : StorageProcessor {
-    if (typeof config.processor == 'string' && !StorageProcessors[config.processor]) 
+  static init(params: StorageParams) : StorageProcessor {
+    if(!params.config) throw('GrapeRank : Storage : missing config required for Storage');
+    if (typeof params.processor == 'string' && !StorageProcessors[params.processor]) 
       throw('GrapeRank : Storage : ERROR invalid storage processor provided.')
 
-    let processor : StorageProcessor = typeof config.processor == 'string'
-      ? new StorageProcessors[config.processor](config.config)
-      : config.processor;
+    let storage : StorageProcessor = typeof params.processor == 'string'
+      ? new StorageProcessors[params.processor](params.config)
+      : params.processor;
     
-    return processor
+    return storage
   }
 }

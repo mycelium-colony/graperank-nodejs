@@ -8,6 +8,7 @@ export class s3Processor implements StorageProcessor {
   scorecards : StorageOperations<GrapevineKeys, ScorecardsEntry[]>
 
   constructor(config : s3Config) {
+    if(!config) throw('GrapeRank : Storage : missing config required for s3Processor');
     let s3 = new s3Api(config)
 
     this.observers = {
